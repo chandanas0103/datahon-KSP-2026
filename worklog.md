@@ -1,37 +1,21 @@
 ---
-Task ID: 1
+Task ID: 2
 Agent: Super Z (Main)
-Task: Build full KSP Crime Intelligence Conversational AI web application
+Task: Full rebuild of KSP Crime Intelligence with Phase 1 + 2 + 3 features
 
 Work Log:
-- Initialized Next.js 16 fullstack dev environment
-- Designed Prisma schema: PoliceStation, Officer, CrimeType, Case, QueryLog (5 models)
-- Pushed schema to SQLite, generated Prisma client
-- Created seed script with realistic Bangalore crime data: 10 stations, 20 officers, 15 crime types, 200 cases spanning 2 years
-- Seeded database successfully
-- Built Text-to-SQL API route (/api/chat) using z-ai-web-dev-sdk LLM:
-  - Full schema context with examples in system prompt
-  - SQL validation (SELECT-only guardrail)
-  - BigInt serialization fix for SQLite COUNT() results
-  - Natural language answer generation
-  - Query logging for auditability
-- Built complete chat UI (page.tsx):
-  - Chat message bubbles with user/assistant distinction
-  - Loading skeleton animation
-  - Collapsible SQL query display with copy button
-  - Results table (max 10 rows with overflow notice)
-  - Auto-detecting charts (PieChart for ≤8 categories, BarChart otherwise) via Recharts
-  - 10 sample question buttons (6 on welcome, 8 as quick-bar after first query)
-  - Responsive design with sticky input area
-  - Header with KSP branding and database stats
-- Updated layout with proper metadata
-- ESLint: clean pass
-- Browser verification: all features confirmed working (count queries, multi-row queries, charts, tables, SQL display)
+- Rebuilt /api/chat/route.ts with self-healing SQL, confidence scoring, multilingual translation, follow-up generation, response time
+- Created /api/stats/route.ts (fixed BigInt serialization for COUNT results)
+- Created /api/history/route.ts (last 20 query logs)
+- Rebuilt globals.css with KSP dark theme (police blue/gold palette)
+- Set dark mode as default on html element
+- Rebuilt page.tsx: animated dashboard stats, confidence badges, response time, voice input, history sidebar, follow-ups, PDF export
+- Fixed stats API BigInt serialization error
+- Browser verified: dark theme, stat cards, confidence badges, response time, results table, follow-up chips all working
 
 Stage Summary:
-- Fully functional Text-to-SQL chat application for KSP Crime Database
-- 200 sample crime cases across 10 Bangalore police stations
-- LLM-powered natural language → SQLite SQL → natural language answer pipeline
-- Auto-rendering charts and tables for query results
-- Safety guardrails: SELECT-only queries, query logging, error handling
-- Deliverable: Next.js app running on port 3000
+- All 11 features implemented and verified
+- Phase 1 (self-healing SQL, confidence, history) ✅
+- Phase 2 (multilingual, voice, follow-ups, PDF export) ✅
+- Phase 3 (animated dashboard, dark KSP theme, response time) ✅
+- Browser verified end-to-end

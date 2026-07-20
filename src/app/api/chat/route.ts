@@ -81,6 +81,27 @@ Q: "Show all high priority cases from last 3 months"
 SQL: SELECT c.firNumber, ct.name as crime_type, ps.name as station, c.status, c.filedDate, c.priority FROM \`Case\` c JOIN CrimeType ct ON c.crimeTypeId = ct.id JOIN PoliceStation ps ON c.stationId = ps.id WHERE c.priority = 'High' AND date(c.filedDate) >= date('now', '-3 months') ORDER BY c.filedDate DESC LIMIT 20;
 `;
 
+const TRANSLATION_PROMPT = `You are a translator for Indian police queries. Translate the following query to English if it is in Kannada, Hindi, or any other language. If it is already in English, return it exactly as-is. Return ONLY the translated text, nothing else.
+
+Query: `;
+
+const FOLLOWUP_PROMPT = `Based on the user's question and the SQL query result, suggest 3 short follow-up questions (under 10 words each) that a police officer might naturally ask next. Return ONLY a JSON array of strings, no explanation. Example: ["Show details of the top case", "Compare with last year", "Which officer handles most?"]
+
+User question: `;
+const ERROR_FIX_PROMPT = `The following SQL query failed with a database error. Fix the SQL and return ONLY the corrected SQL query, no explanation.
+
+Original question: `;
+const CONFIDENCE_PROMPT = `You are evaluating the confidence of a Text-to-SQL answer. Given the original question, the generated SQL, and the query result, rate confidence as "high", "medium", or "low".
+
+Rules:
+- "high": SQL clearly matches the question intent, results are non-empty and relevant
+- "medium": SQL is reasonable but results are empty, or SQL is a partial match to the question
+- "low": SQL seems incorrect, results are empty for an aggregation question, or the question is ambiguous
+
+Return ONLY one word: high, medium, or low.
+
+Question: `;
+
 function serializeResults(
   results: Record<string, unknown>[]
 ): Record<string, unknown>[] {
@@ -99,22 +120,18 @@ function serializeResults(
 
 function validateSQL(sql: string): { valid: boolean; reason?: string } {
   const normalized = sql.replace(/\s+/g, " ").trim().toLowerCase();
-
   const forbidden = [
     /\b(insert|update|delete|drop|alter|create|truncate|grant|revoke)\b/,
     /;\s*(insert|update|delete|drop|alter|create|truncate)/i,
   ];
-
   for (const pattern of forbidden) {
     if (pattern.test(normalized)) {
       return { valid: false, reason: "Only SELECT queries are allowed for safety." };
     }
   }
-
   if (!normalized.startsWith("select")) {
     return { valid: false, reason: "Only SELECT queries are permitted." };
   }
-
   return { valid: true };
 }
 
@@ -126,8 +143,6 @@ function generateNaturalAnswer(
   if (results.length === 0) {
     return "No matching records found for your query. You may want to try adjusting your search criteria or checking if the data exists in the database.";
   }
-
-  // Count query
   if (results.length === 1 && Object.keys(results[0]).length === 1) {
     const key = Object.keys(results[0])[0];
     const val = results[0][key];
@@ -135,16 +150,12 @@ function generateNaturalAnswer(
       return `Found **${val}** matching record(s) based on your query.`;
     }
   }
-
-  // Top-item query
   if (results.length === 1) {
     const entry = results[0];
     const keys = Object.keys(entry);
     const values = keys.map((k) => `${k}: ${entry[k]}`).join(", ");
     return `Here is the result: ${values}.`;
   }
-
-  // Multi-row results
   const totalRows = results.length;
   const displayRows = results.slice(0, 5);
   const summary = displayRows
@@ -153,101 +164,185 @@ function generateNaturalAnswer(
       return keys.map((k) => `${k}: ${row[k]}`).join(", ");
     })
     .join("\n");
-
   const more = totalRows > 5 ? `\n...and ${totalRows - 5} more results (showing top 5).` : "";
   return `Found **${totalRows}** results. Top results:\n${summary}${more}`;
 }
 
+async function callLLM(messages: { role: string; content: string }[], temperature = 0.1): Promise<string> {
+  const zai = await ZAI.create();
+  const completion = await zai.chat.completions.create({
+    messages,
+    thinking: { type: "disabled" },
+    temperature,
+  });
+  return completion.choices[0]?.message?.content?.trim() || "";
+}
+
+function cleanSQL(sql: string): string {
+  return sql.replace(/^```(?:sql)?\s*/i, "").replace(/\s*```$/i, "").trim();
+}
+
+async function generateFollowups(question: string, results: Record<string, unknown>[]): Promise<string[]> {
+  try {
+    const resultSummary = results.length > 0
+      ? `Results: ${JSON.stringify(results.slice(0, 3))}`
+      : "Results: empty";
+    const response = await callLLM(
+      [
+        { role: "assistant", content: FOLLOWUP_PROMPT },
+        { role: "user", content: `${question}\n${resultSummary}` },
+      ],
+      0.7
+    );
+    const cleaned = response.replace(/```json?/gi, "").replace(/```/g, "").trim();
+    const parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed) && parsed.length >= 3) {
+      return parsed.slice(0, 3).map(String);
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+async function getConfidence(question: string, sql: string, results: Record<string, unknown>[]): Promise<string> {
+  try {
+    const resultInfo = results.length === 0 ? "Results: empty (0 rows)" : `Results: ${results.length} rows returned`;
+    const response = await callLLM(
+      [
+        { role: "assistant", content: CONFIDENCE_PROMPT },
+        { role: "user", content: `${question}\n\nSQL: ${sql}\n\n${resultInfo}` },
+      ],
+      0.0
+    );
+    const cleaned = response.toLowerCase().trim();
+    if (cleaned.includes("high")) return "high";
+    if (cleaned.includes("medium")) return "medium";
+    return "low";
+  } catch {
+    return "medium";
+  }
+}
+
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
   try {
     const body = await request.json();
     const { question } = body;
 
     if (!question || typeof question !== "string") {
-      return NextResponse.json(
-        { error: "A question is required." },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "A question is required." }, { status: 400 });
     }
 
-    // Call LLM to generate SQL
+    // Step 1: Translate if needed (Kannada/Hindi → English)
+    let translatedQuestion = question;
     const zai = await ZAI.create();
-    const completion = await zai.chat.completions.create({
+    const translationResult = await zai.chat.completions.create({
       messages: [
-        { role: "assistant", content: SCHEMA_CONTEXT },
+        { role: "assistant", content: TRANSLATION_PROMPT },
         { role: "user", content: question },
       ],
       thinking: { type: "disabled" },
-      temperature: 0.1,
+      temperature: 0.0,
     });
+    const translated = translationResult.choices[0]?.message?.content?.trim();
+    if (translated && translated.toLowerCase() !== question.toLowerCase()) {
+      translatedQuestion = translated;
+    }
 
-    let sql = completion.choices[0]?.message?.content?.trim() || "";
+    // Step 2: Generate SQL with self-healing retry
+    let sql = "";
+    let results: Record<string, unknown>[] = [];
+    let dbError: string | null = null;
+    let retries = 0;
+    const maxRetries = 2;
+    let lastError = "";
 
-    // Clean up markdown code fences if the LLM wrapped them
-    sql = sql.replace(/^```(?:sql)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    while (retries <= maxRetries) {
+      // Generate SQL
+      if (retries === 0) {
+        const completion = await zai.chat.completions.create({
+          messages: [
+            { role: "assistant", content: SCHEMA_CONTEXT },
+            { role: "user", content: translatedQuestion },
+          ],
+          thinking: { type: "disabled" },
+          temperature: 0.1,
+        });
+        sql = cleanSQL(completion.choices[0]?.message?.content || "");
+      } else {
+        // Retry: ask LLM to fix the SQL based on the error
+        const fixPrompt = `${ERROR_FIX_PROMPT}${translatedQuestion}\n\nBroken SQL: ${sql}\n\nError: ${lastError}`;
+        const fixResponse = await callLLM([
+          { role: "assistant", content: SCHEMA_CONTEXT + "\n\n" + fixPrompt },
+          { role: "user", content: "Fix this SQL query." },
+        ]);
+        sql = cleanSQL(fixResponse);
+      }
+
+      if (!sql) break;
+
+      // Validate
+      const validation = validateSQL(sql);
+      if (!validation.valid) {
+        dbError = validation.reason || "Safety violation";
+        break;
+      }
+
+      // Execute
+      try {
+        const rawResults = await db.$queryRawUnsafe(sql);
+        results = serializeResults(rawResults as Record<string, unknown>[]);
+        dbError = null;
+        break;
+      } catch (err: unknown) {
+        lastError = err instanceof Error ? err.message : String(err);
+        retries++;
+      }
+    }
 
     if (!sql) {
       return NextResponse.json({
-        answer:
-          "I couldn't generate a query for that question. Please try rephrasing it.",
-        sql: null,
-        results: [],
+        answer: "I couldn't generate a query for that question. Please try rephrasing it.",
+        sql: null, results: [], confidence: "low", translatedQuestion,
+        responseTime: Date.now() - startTime, followups: [],
       });
     }
 
-    // Validate SQL
-    const validation = validateSQL(sql);
-    if (!validation.valid) {
+    if (dbError) {
       return NextResponse.json({
-        answer: `Safety restriction: ${validation.reason}`,
-        sql,
-        results: [],
+        answer: `The generated query encountered an error: ${dbError}. Please try rephrasing your question.`,
+        sql, results: [], confidence: "low", error: dbError,
+        translatedQuestion, responseTime: Date.now() - startTime, followups: [],
       });
     }
 
-    // Execute SQL against SQLite
-    let results: Record<string, unknown>[] = [];
-    try {
-      const rawResults = await db.$queryRawUnsafe(sql);
-      results = serializeResults(rawResults as Record<string, unknown>[]);
-    } catch (dbError: unknown) {
-      const errMsg = dbError instanceof Error ? dbError.message : String(dbError);
-      return NextResponse.json({
-        answer: `The generated query encountered a database error: ${errMsg}. Please try rephrasing your question.`,
-        sql,
-        results: [],
-        error: errMsg,
-      });
-    }
+    // Step 3: Generate natural answer
+    const answer = generateNaturalAnswer(translatedQuestion, sql, results);
 
-    // Generate natural language answer
-    const answer = generateNaturalAnswer(question, sql, results);
+    // Step 4: Confidence scoring (parallel with followups)
+    const [confidence, followups] = await Promise.all([
+      getConfidence(translatedQuestion, sql, results),
+      generateFollowups(translatedQuestion, results),
+    ]);
 
-    // Log the query
+    // Step 5: Log the query
     await db.queryLog.create({
-      data: {
-        question,
-        sqlQuery: sql,
-        sqlResult: JSON.stringify(results),
-        answer,
-      },
+      data: { question, sqlQuery: sql, sqlResult: JSON.stringify(results), answer },
     });
 
+    const responseTime = Date.now() - startTime;
+
     return NextResponse.json({
-      answer,
-      sql,
-      results,
+      answer, sql, results, confidence,
+      translatedQuestion: translatedQuestion !== question ? translatedQuestion : null,
+      responseTime, followups,
     });
   } catch (error: unknown) {
     const errMsg = error instanceof Error ? error.message : String(error);
     console.error("Chat API error:", errMsg);
     return NextResponse.json(
-      {
-        answer: `An internal error occurred: ${errMsg}. Please try again.`,
-        sql: null,
-        results: [],
-        error: errMsg,
-      },
+      { answer: `An internal error occurred: ${errMsg}. Please try again.`, sql: null, results: [], error: errMsg, confidence: "low", responseTime: Date.now() - (request as unknown as Record<string, number>)._startTime || 0, followups: [] },
       { status: 500 }
     );
   }
