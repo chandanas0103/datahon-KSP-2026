@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model PoliceStation {
+  id          String @id @default(cuid())
+  stationCode String @unique
+  name        String
+  area        String
+  district    String
+  address     String
+  phone       String?
+  createdAt   DateTime @default(now())
+
+  officers    Officer[]
+  cases       Case[]
+}
+
+model Officer {
+  id           String @id @default(cuid())
+  badgeNumber  String @unique
+  name         String
+  rank         String
+  stationId    String
+  phone        String?
+  email        String?
+  createdAt    DateTime @default(now())
+
+  station      PoliceStation @relation(fields: [stationId], references: [id])
+  assignedCases Case[]       @relation("AssignedOfficer")
+}
+
+model CrimeType {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  category    String
+  isBailable  Boolean @default(true)
+  description String?
+
+  cases       Case[]
+}
+
+model Case {
+  id            String    @id @default(cuid())
+  firNumber     String    @unique
+  crimeTypeId   String
+  stationId     String
+  status        String    @default("Open")
+  priority      String    @default("Medium")
+  assignedToId  String?
+  filedDate     DateTime  @default(now())
+  incidentDate  DateTime
+  incidentTime  String?
+  resolvedDate  DateTime?
+  description   String
+  location      String
+  latitude      Float?
+  longitude     Float?
+  victimName    String?
+  victimAge     Int?
+  victimGender  String?
+  suspectName   String?
+  suspectAge    Int?
+  suspectGender String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  crimeType     CrimeType     @relation(fields: [crimeTypeId], references: [id])
+  station       PoliceStation @relation(fields: [stationId], references: [id])
+  assignedTo    Officer?      @relation("AssignedOfficer", fields: [assignedToId], references: [id])
+}
+
+model QueryLog {
+  id         String   @id @default(cuid())
+  question   String
+  sqlQuery   String
+  sqlResult  String?
+  answer     String?
+  createdAt  DateTime @default(now())
+}
