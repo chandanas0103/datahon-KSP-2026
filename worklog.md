@@ -1,21 +1,33 @@
 ---
-Task ID: 2
-Agent: Super Z (Main)
-Task: Full rebuild of KSP Crime Intelligence with Phase 1 + 2 + 3 features
+Task ID: 1
+Agent: Super Z (main)
+Task: Build Phase 1 + Phase 2 improvements for KSP Crime Intelligence
 
 Work Log:
-- Rebuilt /api/chat/route.ts with self-healing SQL, confidence scoring, multilingual translation, follow-up generation, response time
-- Created /api/stats/route.ts (fixed BigInt serialization for COUNT results)
-- Created /api/history/route.ts (last 20 query logs)
-- Rebuilt globals.css with KSP dark theme (police blue/gold palette)
-- Set dark mode as default on html element
-- Rebuilt page.tsx: animated dashboard stats, confidence badges, response time, voice input, history sidebar, follow-ups, PDF export
-- Fixed stats API BigInt serialization error
-- Browser verified: dark theme, stat cards, confidence badges, response time, results table, follow-up chips all working
+- Read and assessed all existing code from previous session (route.ts, page.tsx, layout.tsx, globals.css, stats/history APIs)
+- Fixed critical `_startTime` reference bug in error handler of chat API
+- Unified LLM calls to use `callLLM()` helper consistently (removed duplicate ZAI.create() for translation)
+- Added translation error handling (graceful fallback if translation fails)
+- Added `selfHealed` and `retryCount` to API response for frontend display
+- Created `/api/export-pdf/route.ts` — proper HTML report generation with KSP branding, tables, SQL, confidence badge
+- Rebuilt `page.tsx` with all improvements:
+  - Fixed sidebar: toggle-able on all screen sizes, overlay on mobile with backdrop, defaults to open on desktop
+  - Added `SelfHealBadge` component showing retry count
+  - Added `TranslationNotice` with original → translated display
+  - Added `FeaturePill` components on landing page showcasing all 6 features
+  - Added voice language cycling (KN → HI → EN) with visual indicator
+  - Improved landing page with animated entry, status dot, and feature pills
+  - Better loading states with context-aware text ("Self-healing query..." vs "Analyzing...")
+  - Fixed PDF export to pass correct user question (not assistant response)
+  - Added "About" link in header
+- Created `/about` page with 8-step pipeline architecture diagram, safety features grid, database schema summary, tech stack badges
+- Seeded database (10 stations, 20 officers, 15 crime types, 200 cases)
+- Verified full build (0 errors, 9 routes including /about and /api/export-pdf)
+- Browser tested: landing page, first query (count), second query (pie chart + table), about page, export API, stats API, history API
 
 Stage Summary:
-- All 11 features implemented and verified
-- Phase 1 (self-healing SQL, confidence, history) ✅
-- Phase 2 (multilingual, voice, follow-ups, PDF export) ✅
-- Phase 3 (animated dashboard, dark KSP theme, response time) ✅
-- Browser verified end-to-end
+- All Phase 1 features complete: self-healing SQL, confidence scoring, query history sidebar
+- All Phase 2 features complete: multilingual translation, voice input with language cycling, smart follow-ups, one-click report export
+- Phase 3 bonus: /about architecture page, animated dashboard stats, feature pills, self-heal badge
+- All APIs verified working: /api/chat, /api/stats, /api/history, /api/export-pdf
+- App running on port 3000

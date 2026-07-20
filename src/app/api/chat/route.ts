@@ -236,18 +236,16 @@ export async function POST(request: NextRequest) {
 
     // Step 1: Translate if needed (Kannada/Hindi → English)
     let translatedQuestion = question;
-    const zai = await ZAI.create();
-    const translationResult = await zai.chat.completions.create({
-      messages: [
-        { role: "assistant", content: TRANSLATION_PROMPT },
-        { role: "user", content: question },
-      ],
-      thinking: { type: "disabled" },
-      temperature: 0.0,
-    });
-    const translated = translationResult.choices[0]?.message?.content?.trim();
-    if (translated && translated.toLowerCase() !== question.toLowerCase()) {
-      translatedQuestion = translated;
+    try {
+      const translated = await callLLM(
+        [{ role: "assistant", content: TRANSLATION_PROMPT }, { role: "user", content: question }],
+        0.0
+      );
+      if (translated && translated.toLowerCase() !== question.toLowerCase()) {
+        translatedQuestion = translated;
+      }
+    } catch {
+      // Translation failed — proceed with original question
     }
 
     // Step 2: Generate SQL with self-healing retry
@@ -258,24 +256,20 @@ export async function POST(request: NextRequest) {
     const maxRetries = 2;
     let lastError = "";
 
+    let retryCount = 0;
     while (retries <= maxRetries) {
       // Generate SQL
       if (retries === 0) {
-        const completion = await zai.chat.completions.create({
-          messages: [
-            { role: "assistant", content: SCHEMA_CONTEXT },
-            { role: "user", content: translatedQuestion },
-          ],
-          thinking: { type: "disabled" },
-          temperature: 0.1,
-        });
-        sql = cleanSQL(completion.choices[0]?.message?.content || "");
+        sql = cleanSQL(await callLLM(
+          [{ role: "assistant", content: SCHEMA_CONTEXT }, { role: "user", content: translatedQuestion }],
+          0.1
+        ));
       } else {
         // Retry: ask LLM to fix the SQL based on the error
-        const fixPrompt = `${ERROR_FIX_PROMPT}${translatedQuestion}\n\nBroken SQL: ${sql}\n\nError: ${lastError}`;
+        retryCount++;
         const fixResponse = await callLLM([
-          { role: "assistant", content: SCHEMA_CONTEXT + "\n\n" + fixPrompt },
-          { role: "user", content: "Fix this SQL query." },
+          { role: "assistant", content: SCHEMA_CONTEXT + "\n\n" + ERROR_FIX_PROMPT + translatedQuestion + "\n\nBroken SQL: " + sql + "\n\nError: " + lastError },
+          { role: "user", content: "Fix this SQL query. Return ONLY the corrected SQL." },
         ]);
         sql = cleanSQL(fixResponse);
       }
@@ -337,12 +331,13 @@ export async function POST(request: NextRequest) {
       answer, sql, results, confidence,
       translatedQuestion: translatedQuestion !== question ? translatedQuestion : null,
       responseTime, followups,
+      ...(retryCount > 0 ? { selfHealed: true, retryCount } : {}),
     });
   } catch (error: unknown) {
     const errMsg = error instanceof Error ? error.message : String(error);
     console.error("Chat API error:", errMsg);
     return NextResponse.json(
-      { answer: `An internal error occurred: ${errMsg}. Please try again.`, sql: null, results: [], error: errMsg, confidence: "low", responseTime: Date.now() - (request as unknown as Record<string, number>)._startTime || 0, followups: [] },
+      { answer: `An internal error occurred. Please try again.`, sql: null, results: [], error: "Internal server error", confidence: "low", responseTime: Date.now() - startTime, followups: [] },
       { status: 500 }
     );
   }
