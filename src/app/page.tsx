@@ -23,6 +23,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
+  LineChart, Line, AreaChart, Area,
 } from 'recharts'
 
 // ─── Types ─────────────────────────────────────────────────
@@ -54,6 +55,7 @@ interface Message {
   playgroundResult?: Record<string, unknown>[] | null
   playgroundError?: string | null
   playgroundLoading?: boolean
+  insight?: string | null
 }
 
 interface HistoryItem {
@@ -230,23 +232,85 @@ function ResultsTable({ results, onExportCsv }: { results: Record<string, unknow
   )
 }
 
+const tooltipStyle = { backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }
+
 function ChartPanel({ results }: { results: Record<string, unknown>[] }) {
   if (!results || results.length === 0) return null
   const columns = Object.keys(results[0])
+
+  // ── Detect data shape ──
   const countCol = columns.find((c) => c.toLowerCase().includes('count') || c.toLowerCase().includes('total') || c.toLowerCase() === 'case_count' || c.toLowerCase() === 'total_cases')
   const labelCol = columns.find((c) => c !== countCol && typeof results[0][c] === 'string')
-  const isPieSuitable = labelCol && countCol && (
+
+  // Detect multi-value columns (for stacked/grouped bars)
+  const numericCols = columns.filter(c => c !== labelCol && typeof results[0][c] === 'number' || (typeof results[0][c] === 'bigint'))
+
+  // Detect time-series data (label looks like a date/month/year)
+  const isTimeSeries = labelCol && /^\d{4}[-\/]\d{1,2}/.test(String(results[0][labelCol] ?? ''))
+
+  // Detect resolved/open split (for stacked area)
+  const hasResolvedCol = columns.some(c => c.toLowerCase().includes('resolved'))
+  const hasOpenCol = columns.some(c => c.toLowerCase().includes('open'))
+
+  // Pie suitability
+  const isPieSuitable = labelCol && countCol && !isTimeSeries && (
     labelCol.toLowerCase().includes('status') ||
     labelCol.toLowerCase().includes('category') ||
     labelCol.toLowerCase().includes('gender') ||
     labelCol.toLowerCase().includes('priority') ||
-    results.length <= 8
+    results.length <= 6
   )
-  const chartData = results.map((row) => ({
-    name: String(row[labelCol || columns[0]] ?? ''),
-    value: Number(row[countCol || columns[1]] ?? 0),
-  }))
+
   if (!countCol || !labelCol) return null
+
+  // ── Build chart data ──
+  const chartData = results.map((row) => ({
+    name: String(row[labelCol] ?? ''),
+    value: Number(row[countCol] ?? 0),
+    ...(hasResolvedCol ? { resolved: Number(row[columns.find(c => c.toLowerCase().includes('resolved'))!] ?? 0) } : {}),
+    ...(hasOpenCol ? { open: Number(row[columns.find(c => c.toLowerCase().includes('open'))!] ?? 0) } : {}),
+    ...Object.fromEntries(numericCols.filter(c => c !== countCol && c !== labelCol).map(c => [c, Number(row[c] ?? 0)])),
+  }))
+
+  // ── Stacked Area for time-series with resolved/open ──
+  if (isTimeSeries && hasResolvedCol && results.length >= 4) {
+    return (
+      <div className="mt-3 h-64 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+            <YAxis tick={{ fontSize: 11 }} />
+            <RechartsTooltip contentStyle={tooltipStyle} />
+            <Legend wrapperStyle={{ fontSize: '11px' }} />
+            <Area type="monotone" dataKey="resolved" stackId="1" stroke="#22c55e" fill="#22c55e" fillOpacity={0.6} name="Resolved" />
+            <Area type="monotone" dataKey="open" stackId="1" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.6} name="Open" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    )
+  }
+
+  // ── Line Chart for time-series ──
+  if (isTimeSeries && results.length >= 4) {
+    return (
+      <div className="mt-3 h-64 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+            <YAxis tick={{ fontSize: 11 }} />
+            <RechartsTooltip contentStyle={tooltipStyle} />
+            <Legend wrapperStyle={{ fontSize: '11px' }} />
+            <Line type="monotone" dataKey="value" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} name={countCol} />
+            {hasResolvedCol && <Line type="monotone" dataKey="resolved" stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} name="Resolved" />}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    )
+  }
+
+  // ── Pie Chart ──
   if (isPieSuitable) {
     return (
       <div className="mt-3 h-64 w-full">
@@ -257,12 +321,36 @@ function ChartPanel({ results }: { results: Record<string, unknown>[] }) {
               {chartData.map((_, index) => (<Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />))}
             </Pie>
             <Legend />
-            <RechartsTooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }} />
+            <RechartsTooltip contentStyle={tooltipStyle} />
           </PieChart>
         </ResponsiveContainer>
       </div>
     )
   }
+
+  // ── Stacked/Grouped Bar for multi-metric data ──
+  const extraMetrics = numericCols.filter(c => c !== countCol && c !== labelCol && chartData.some(d => (d as Record<string, number>)[c] > 0))
+  if (extraMetrics.length > 0 && results.length <= 15) {
+    return (
+      <div className="mt-3 h-64 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+            <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={results.length > 6 ? -30 : 0} textAnchor={results.length > 6 ? "end" : "middle"} height={results.length > 6 ? 60 : 30} />
+            <YAxis tick={{ fontSize: 11 }} />
+            <RechartsTooltip contentStyle={tooltipStyle} />
+            <Legend wrapperStyle={{ fontSize: '11px' }} />
+            <Bar dataKey="value" fill="hsl(var(--chart-1))" radius={[3, 3, 0, 0]} name={countCol} />
+            {extraMetrics.map((col, i) => (
+              <Bar key={col} dataKey={col} fill={CHART_COLORS[(i + 2) % CHART_COLORS.length]} radius={[3, 3, 0, 0]} name={col.replace(/([A-Z])/g, ' $1').trim()} />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    )
+  }
+
+  // ── Default Bar Chart ──
   return (
     <div className="mt-3 h-64 w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -270,7 +358,7 @@ function ChartPanel({ results }: { results: Record<string, unknown>[] }) {
           <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
           <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-30} textAnchor="end" height={60} />
           <YAxis tick={{ fontSize: 11 }} />
-          <RechartsTooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '12px' }} />
+          <RechartsTooltip contentStyle={tooltipStyle} />
           <Bar dataKey="value" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
@@ -449,6 +537,16 @@ function MessageBubble({ message, userQuestion, onFollowup, onExport, onToggleEx
           </div>
         )}
         {!isUser && message.sql && !message.streamedContent && <SqlBlock sql={message.sql} explanation={message.sqlExplanation} timing={message.timing} showExplanation={message.showExplanation} onToggleExplanation={() => onToggleExplanation(message.id)} onRerunSql={(newSql) => onRerunSql(message.id, newSql)} />}
+        {/* AI Insight Card */}
+        {!isUser && message.insight && !message.streamedContent && (
+          <div className="mt-2.5 rounded-xl border border-primary/15 bg-gradient-to-r from-primary/5 via-primary/[0.03] to-transparent px-3.5 py-2.5">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
+              <span className="text-[11px] font-semibold text-primary">AI Insight</span>
+            </div>
+            <p className="text-xs text-foreground/85 leading-relaxed">{message.insight}</p>
+          </div>
+        )}
         {!isUser && message.playgroundResult !== undefined && !message.streamedContent && (
           <div className="mt-2">
             <div className="flex items-center gap-1.5 mb-1.5">
@@ -755,6 +853,7 @@ export default function Home() {
         responseTime: data.responseTime || 0,
         followups: data.followups || [],
         sqlExplanation: data.sqlExplanation || null,
+        insight: data.insight || null,
         timing: data.timing || null,
         selfHealed: data.selfHealed || false,
         retryCount: data.retryCount || 0,
@@ -820,6 +919,7 @@ export default function Home() {
         results: msg.results,
         confidence: msg.confidence,
         responseTime: msg.responseTime,
+        insight: msg.insight,
       }),
     })
     .then(res => res.blob())
@@ -827,7 +927,7 @@ export default function Home() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `ksp-crime-report-${new Date().toISOString().slice(0, 10)}.html`
+      a.download = `ksp-crime-report-${new Date().toISOString().slice(0, 10)}.pdf`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)

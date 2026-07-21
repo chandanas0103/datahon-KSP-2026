@@ -107,6 +107,16 @@ Return ONLY one word: high, medium, or low.
 
 Question: `;
 
+const INSIGHT_PROMPT = `You are a senior crime analyst for Karnataka State Police. Analyze the following query results and provide 2-3 sentences of actionable intelligence insight. Focus on:
+- Trends, patterns, or anomalies you notice
+- The most significant finding
+- What action a police officer should consider
+- Any comparison insights (highest vs lowest, areas needing attention)
+
+Be specific with numbers. Use professional but accessible language. Do NOT just restate the data — interpret it.
+
+Query: `;
+
 function serializeResults(
   results: Record<string, unknown>[]
 ): Record<string, unknown>[] {
@@ -226,6 +236,24 @@ async function getConfidence(question: string, sql: string, results: Record<stri
     return "low";
   } catch {
     return "medium";
+  }
+}
+
+async function generateInsight(question: string, sql: string, results: Record<string, unknown>[]): Promise<string> {
+  if (results.length === 0) return "";
+  try {
+    const resultSummary = results.length > 5
+      ? `Results (first 5 of ${results.length}): ${JSON.stringify(results.slice(0, 5))}`
+      : `Results: ${JSON.stringify(results)}`;
+    return await callLLM(
+      [
+        { role: "assistant", content: INSIGHT_PROMPT },
+        { role: "user", content: `${question}\n\nSQL: ${sql}\n\n${resultSummary}` },
+      ],
+      0.4
+    );
+  } catch {
+    return "";
   }
 }
 
@@ -360,11 +388,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Step 3: Generate natural answer + SQL explanation (parallel)
+    // Step 3: Generate natural answer + SQL explanation + AI insight (parallel)
     const t3 = Date.now();
-    const [answer, sqlExplanation] = await Promise.all([
+    const [answer, sqlExplanation, insight] = await Promise.all([
       Promise.resolve(generateNaturalAnswer(translatedQuestion, sql, results)),
       explainSQL(sql),
+      generateInsight(translatedQuestion, sql, results),
     ]);
 
     // Step 4: Confidence scoring + followups (parallel)
@@ -388,6 +417,7 @@ export async function POST(request: NextRequest) {
       translatedQuestion: translatedQuestion !== question ? translatedQuestion : null,
       responseTime, followups,
       sqlExplanation: sqlExplanation || null,
+      insight: insight || null,
       timing: { translation: translationTime, sqlGeneration: sqlGenTimeFinal, confidence: confidenceTime },
       ...(retryCount > 0 ? { selfHealed: true, retryCount } : {}),
     });
