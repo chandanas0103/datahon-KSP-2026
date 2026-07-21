@@ -15,7 +15,7 @@ import {
   AlertTriangle, Sparkles, Copy, Check, ChevronDown, ChevronUp,
   Mic, MicOff, FileText, Clock, History, ArrowRight, Languages,
   ShieldCheck, ShieldAlert, ShieldQuestion, X, Download, PanelLeftClose, PanelLeft,
-  TrendingUp, FolderOpen, MapPin, Activity, RefreshCw, Wrench, Zap,
+  TrendingUp, FolderOpen, MapPin, Activity, RefreshCw, Wrench, Zap, Play,
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -39,6 +39,7 @@ interface Message {
   followups?: string[]
   selfHealed?: boolean
   retryCount?: number
+  streamedContent?: string
 }
 
 interface HistoryItem {
@@ -76,6 +77,14 @@ const CHART_COLORS = [
   'hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))',
   'hsl(var(--chart-4))', 'hsl(var(--chart-5))', '#f59e0b', '#8b5cf6',
   '#ec4899', '#14b8a6', '#f97316',
+]
+
+const DEMO_QUERY = 'What are the top 5 most common crime types?'
+const TYPING_PHRASES = [
+  'ನೀವು ಕನ್ನಡದಲ್ಲಿ ಕೇಳಬಹುದು...',
+  'Ask in English, Kannada, or Hindi...',
+  'ಬೆಂಗಳೂರು ಕ್ರೈಮ್ ಡೇಟಾಬೇಸ್ ಗೆ ಪ್ರಶ್ನೆ ಕೇಳಿ...',
+  'Show me crime trends in your area...',
 ]
 
 // ─── Sub-components ────────────────────────────────────────
@@ -227,6 +236,8 @@ function SqlBlock({ sql }: { sql: string }) {
 
 function MessageBubble({ message, userQuestion, onFollowup, onExport }: { message: Message; userQuestion: string; onFollowup: (q: string) => void; onExport: () => void }) {
   const isUser = message.role === 'user'
+  const displayContent = message.streamedContent ?? message.content
+
   if (message.isLoading) {
     return (
       <div className="flex gap-3 max-w-3xl">
@@ -252,7 +263,7 @@ function MessageBubble({ message, userQuestion, onFollowup, onExport }: { messag
       </div>
       <div className={`flex-1 space-y-1.5 ${isUser ? 'text-right' : ''}`}>
         <div className={`inline-block rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${isUser ? 'bg-primary text-primary-foreground rounded-tr-sm' : 'bg-muted rounded-tl-sm'}`}>
-          {message.content}
+          {displayContent}
           {message.error && (
             <div className="mt-2 flex items-center gap-1.5 text-xs text-destructive">
               <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
@@ -263,7 +274,7 @@ function MessageBubble({ message, userQuestion, onFollowup, onExport }: { messag
         {!isUser && message.translatedQuestion && (
           <TranslationNotice original={message.translatedQuestion} translated={message.content} />
         )}
-        {!isUser && (
+        {!isUser && !message.streamedContent && (
           <div className="flex flex-wrap items-center gap-2 mt-1">
             {message.confidence && <ConfidenceBadge level={message.confidence} />}
             {message.selfHealed && message.retryCount && <SelfHealBadge count={message.retryCount} />}
@@ -280,14 +291,14 @@ function MessageBubble({ message, userQuestion, onFollowup, onExport }: { messag
             )}
           </div>
         )}
-        {!isUser && message.sql && <SqlBlock sql={message.sql} />}
-        {!isUser && message.results && message.results.length > 0 && (
+        {!isUser && message.sql && !message.streamedContent && <SqlBlock sql={message.sql} />}
+        {!isUser && message.results && message.results.length > 0 && !message.streamedContent && (
           <>
             <ChartPanel results={message.results} />
             <ResultsTable results={message.results} />
           </>
         )}
-        {!isUser && message.followups && message.followups.length > 0 && (
+        {!isUser && message.followups && message.followups.length > 0 && !message.streamedContent && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {message.followups.map((fq) => (
               <button key={fq} onClick={() => onFollowup(fq)} className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-colors">
@@ -348,7 +359,6 @@ function DashboardStats({ stats }: { stats: Stats }) {
 }
 
 function HistorySidebar({ history, onQuery, isOpen, onToggle }: { history: HistoryItem[]; onQuery: (q: string) => void; isOpen: boolean; onToggle: () => void }) {
-  // Format relative time
   const timeAgo = (dateStr: string) => {
     const now = Date.now()
     const then = new Date(dateStr).getTime()
@@ -361,11 +371,9 @@ function HistorySidebar({ history, onQuery, isOpen, onToggle }: { history: Histo
 
   return (
     <>
-      {/* Mobile overlay */}
       {isOpen && (
         <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={onToggle} />
       )}
-      {/* Sidebar */}
       <aside className={`fixed lg:relative z-50 lg:z-auto top-0 left-0 h-full w-72 flex-shrink-0 border-r bg-card/95 backdrop-blur-lg transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex flex-col h-full">
           <div className="p-4 border-b flex items-center justify-between">
@@ -407,13 +415,82 @@ function HistorySidebar({ history, onQuery, isOpen, onToggle }: { history: Histo
   )
 }
 
-// ─── Feature Badges for Landing ────────────────────────────
+// ─── Feature Pills for Landing ────────────────────────────
 
 function FeaturePill({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground/70 bg-muted/40 px-2.5 py-1 rounded-full">
       <Icon className="h-3 w-3" />{label}
     </span>
+  )
+}
+
+// ─── Typing Animation Component ───────────────────────────
+
+function TypingHero({ onComplete }: { onComplete?: () => void }) {
+  const [phraseIdx, setPhraseIdx] = useState(0)
+  const [charIdx, setCharIdx] = useState(0)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [display, setDisplay] = useState('')
+
+  useEffect(() => {
+    const currentPhrase = TYPING_PHRASES[phraseIdx]
+    let timeout: ReturnType<typeof setTimeout>
+
+    if (!isDeleting && charIdx < currentPhrase.length) {
+      timeout = setTimeout(() => {
+        setDisplay(currentPhrase.slice(0, charIdx + 1))
+        setCharIdx(charIdx + 1)
+      }, 50 + Math.random() * 40)
+    } else if (!isDeleting && charIdx === currentPhrase.length) {
+      timeout = setTimeout(() => setIsDeleting(true), 2000)
+    } else if (isDeleting && charIdx > 0) {
+      timeout = setTimeout(() => {
+        setDisplay(currentPhrase.slice(0, charIdx - 1))
+        setCharIdx(charIdx - 1)
+      }, 25)
+    } else if (isDeleting && charIdx === 0) {
+      setIsDeleting(false)
+      const nextIdx = (phraseIdx + 1) % TYPING_PHRASES.length
+      setPhraseIdx(nextIdx)
+    }
+
+    return () => clearTimeout(timeout)
+  }, [charIdx, isDeleting, phraseIdx])
+
+  return (
+    <div className="h-8 flex items-center justify-center">
+      <span className="text-base text-primary/90 font-mono">
+        {display}
+        <span className="animate-pulse">|</span>
+      </span>
+    </div>
+  )
+}
+
+// ─── Guided Demo Banner ──────────────────────────────────
+
+function DemoBanner({ onPlay, onDismiss }: { onPlay: () => void; onDismiss: () => void }) {
+  return (
+    <div className="w-full max-w-2xl animate-in fade-in slide-in-from-bottom-3 duration-700">
+      <div className="relative overflow-hidden rounded-xl border border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-4">
+        <button onClick={onDismiss} className="absolute top-2 right-2 p-1 rounded-md hover:bg-muted/50 transition-colors">
+          <X className="h-3.5 w-3.5 text-muted-foreground" />
+        </button>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center flex-shrink-0">
+            <Play className="h-4 w-4 text-primary ml-0.5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-foreground/90">New here? Watch a quick demo</p>
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">See the AI analyze: &ldquo;{DEMO_QUERY}&rdquo;</p>
+          </div>
+          <Button size="sm" onClick={onPlay} className="flex-shrink-0 rounded-xl gap-1.5 text-xs">
+            <Zap className="h-3 w-3" />Try Demo
+          </Button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -427,9 +504,12 @@ export default function Home() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  // Close sidebar by default on mobile
+  const [showDemo, setShowDemo] = useState(false)
   useEffect(() => {
     if (window.innerWidth < 1024) setSidebarOpen(false)
+    // Show demo banner only for first-time visitors
+    const hasVisited = localStorage.getItem('ksp-visited')
+    if (!hasVisited) setShowDemo(true)
   }, [])
   const [voiceLang, setVoiceLang] = useState<'kn-IN' | 'hi-IN' | 'en-IN'>('kn-IN')
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -443,13 +523,35 @@ export default function Home() {
   // Refresh history after each new assistant message
   const lastMsg = messages[messages.length - 1]
   useEffect(() => {
-    if (messages.length > 0 && lastMsg?.role === 'assistant' && !lastMsg?.isLoading) {
+    if (messages.length > 0 && lastMsg?.role === 'assistant' && !lastMsg?.isLoading && !lastMsg?.streamedContent) {
       fetch('/api/history').then(r => r.json()).then(setHistory).catch(() => {})
     }
-  }, [messages.length, lastMsg?.role, lastMsg?.isLoading])
+  }, [messages.length, lastMsg?.role, lastMsg?.isLoading, lastMsg?.streamedContent])
+
+  // ── Stream text character-by-character for perceived speed ──
+  const streamText = useCallback((msgId: string, text: string, finalMsg: Message) => {
+    let idx = 0
+    const speed = Math.max(8, Math.min(30, 1500 / text.length))
+    const interval = setInterval(() => {
+      idx += Math.ceil(text.length / 60)
+      if (idx >= text.length) {
+        idx = text.length
+        clearInterval(interval)
+        // Replace streamed message with full message (show charts, sql, etc.)
+        setMessages((prev) => prev.map(m => m.id === msgId ? { ...finalMsg, streamedContent: undefined } : m))
+      } else {
+        setMessages((prev) => prev.map(m => m.id === msgId ? { ...m, streamedContent: text.slice(0, idx) } : m))
+      }
+    }, speed)
+    return () => clearInterval(interval)
+  }, [])
 
   const sendMessage = useCallback(async (question: string) => {
     if (!question.trim() || isSending) return
+    // Mark visited so demo banner doesn't show again
+    localStorage.setItem('ksp-visited', '1')
+    setShowDemo(false)
+
     const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: question.trim() }
     const loadingMsg: Message = { id: crypto.randomUUID(), role: 'assistant', content: '', isLoading: true }
     setMessages((prev) => [...prev, userMsg, loadingMsg])
@@ -458,10 +560,11 @@ export default function Home() {
     try {
       const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: question.trim() }) })
       const data = await res.json()
+      const answer = data.answer || 'No response generated.'
       const assistantMsg: Message = {
-        id: crypto.randomUUID(),
+        id: loadingMsg.id,
         role: 'assistant',
-        content: data.answer || 'No response generated.',
+        content: answer,
         sql: data.sql || null,
         results: data.results || [],
         error: data.error,
@@ -472,7 +575,10 @@ export default function Home() {
         selfHealed: data.selfHealed || false,
         retryCount: data.retryCount || 0,
       }
-      setMessages((prev) => [...prev.slice(0, -1), assistantMsg])
+      // Replace loading with streaming
+      setMessages((prev) => [...prev.slice(0, -1), { ...assistantMsg, streamedContent: '' }])
+      // Start streaming the text
+      streamText(loadingMsg.id, answer, assistantMsg)
     } catch {
       setMessages((prev) => [...prev.slice(0, -1), {
         id: crypto.randomUUID(), role: 'assistant',
@@ -480,7 +586,7 @@ export default function Home() {
         error: 'Network error',
       }])
     } finally { setIsSending(false) }
-  }, [isSending])
+  }, [isSending, streamText])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input) }
@@ -513,7 +619,6 @@ export default function Home() {
 
   const cycleVoiceLang = useCallback(() => {
     const langs: Array<'kn-IN' | 'hi-IN' | 'en-IN'> = ['kn-IN', 'hi-IN', 'en-IN']
-    const labels = { 'kn-IN': 'KN', 'hi-IN': 'HI', 'en-IN': 'EN' }
     const idx = langs.indexOf(voiceLang)
     const next = langs[(idx + 1) % langs.length]
     setVoiceLang(next)
@@ -544,13 +649,11 @@ export default function Home() {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
     })
-    .catch(() => {
-      // Fallback to print
-      window.print()
-    })
+    .catch(() => { window.print() })
   }, [])
 
   const clearChat = useCallback(() => { setMessages([]) }, [])
+  const handleDemo = useCallback(() => { sendMessage(DEMO_QUERY) }, [sendMessage])
 
   const voiceLangLabel = { 'kn-IN': 'KN', 'hi-IN': 'HI', 'en-IN': 'EN' }[voiceLang]
 
@@ -610,22 +713,25 @@ export default function Home() {
             <div className="max-w-3xl mx-auto">
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center min-h-[65vh] text-center space-y-6">
+                  {/* Animated Hero */}
                   <div className="relative">
-                    <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-                      <MessageSquare className="h-8 w-8 text-primary" />
+                    <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center animate-in fade-in duration-500">
+                      <MessageSquare className="h-10 w-10 text-primary" />
                     </div>
-                    <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
-                      <Zap className="h-3 w-3 text-white" />
+                    <div className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center animate-in zoom-in-50 duration-700 delay-300">
+                      <Zap className="h-3.5 w-3.5 text-white" />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <h2 className="text-2xl font-bold tracking-tight">Ask anything about crime data</h2>
-                    <p className="text-sm text-muted-foreground max-w-lg mx-auto">
-                      Query the Karnataka State Police crime database using natural language.
-                      Get instant answers with charts, confidence scores, and exportable reports.
-                    </p>
+                  <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-200">
+                    <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-foreground/70 bg-clip-text">Ask anything about crime data</h2>
+                    {/* Typing Animation */}
+                    <TypingHero />
                   </div>
-                  <div className="flex flex-wrap justify-center gap-2">
+                  <p className="text-sm text-muted-foreground max-w-lg mx-auto animate-in fade-in duration-700 delay-400">
+                    Query the Karnataka State Police crime database using natural language.
+                    Get instant answers with charts, confidence scores, and exportable reports.
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-2 animate-in fade-in duration-700 delay-500">
                     <FeaturePill icon={ShieldCheck} label="Self-healing SQL" />
                     <FeaturePill icon={Languages} label="Multilingual (EN/KN/HI)" />
                     <FeaturePill icon={ShieldQuestion} label="Confidence Scoring" />
@@ -634,9 +740,13 @@ export default function Home() {
                     <FeaturePill icon={Sparkles} label="Smart Follow-ups" />
                   </div>
                   {stats && <DashboardStats stats={stats} />}
+                  {/* Demo Banner for first-time visitors */}
+                  {showDemo && (
+                    <DemoBanner onPlay={handleDemo} onDismiss={() => setShowDemo(false)} />
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-2xl mt-2">
                     {SAMPLE_QUESTIONS.slice(0, 6).map((q, i) => (
-                      <button key={q} onClick={() => sendMessage(q)} className="text-left text-sm px-4 py-3 rounded-xl border border-border/50 bg-card hover:bg-muted/50 hover:border-border transition-all duration-200 group animate-in fade-in slide-in-from-bottom-2" style={{ animationDelay: `${i * 50}ms`, animationFillMode: 'backwards' }}>
+                      <button key={q} onClick={() => sendMessage(q)} className="text-left text-sm px-4 py-3 rounded-xl border border-border/50 bg-card hover:bg-muted/50 hover:border-border transition-all duration-200 group animate-in fade-in slide-in-from-bottom-2" style={{ animationDelay: `${600 + i * 50}ms`, animationFillMode: 'backwards' }}>
                         <span className="flex items-start gap-2">
                           <Sparkles className="h-4 w-4 text-primary/60 mt-0.5 flex-shrink-0 group-hover:text-primary transition-colors" />
                           <span className="text-foreground/80 group-hover:text-foreground transition-colors">{q}</span>
@@ -666,7 +776,7 @@ export default function Home() {
           </div>
 
           {/* Follow-up Quick Bar */}
-          {messages.length > 0 && !lastMsg?.isLoading && lastMsg?.followups && lastMsg.followups!.length > 0 && (
+          {messages.length > 0 && !lastMsg?.isLoading && lastMsg?.followups && lastMsg.followups!.length > 0 && !lastMsg?.streamedContent && (
             <div className="no-print px-4 sm:px-6 pb-1">
               <div className="max-w-3xl mx-auto">
                 <ScrollArea className="w-full">

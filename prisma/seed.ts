@@ -56,21 +56,21 @@ const crimeTypes = [
   { name: 'Drug Offense', category: 'Narcotics', isBailable: false, description: 'Illegal possession or trafficking of drugs' },
 ]
 
-const locations = {
-  'Whitefield': ['ITPL Road', 'Viveknagar', 'Ramagondanahalli', 'Siddapura', 'Hope Farm Junction', 'Whitefield Main Road', 'Maheshwaram Nagar', 'Thubarahalli'],
-  'Indiranagar': ['100 Feet Road', 'BMRCL Layout', 'CMH Road', 'HAL 2nd Stage', 'Defence Colony', 'Jeevanbhimanagar', 'New Thippasandra', 'Chinnappanahalli'],
-  'Koramangala': ['4th Block', '5th Block', '1st Block', '6th Block', 'ST Bed Layout', 'Jakkasandra', 'Siddapura', 'Koramangala Club Road'],
-  'HSR Layout': ['Sector 1', 'Sector 2', 'Sector 3', 'Sector 4', 'Sector 5', 'Sector 7', 'Bommanahalli', 'Agara'],
-  'JP Nagar': ['1st Phase', '2nd Phase', '4th Phase', '6th Phase', '7th Phase', '8th Phase', 'Jayanagar 9th Block', 'Puttenahalli'],
-  'BTM Layout': ['1st Stage', '2nd Stage', '2nd Stage Layout', 'Mico Layout', 'Arekere', 'Bannerghatta Road', 'Hulimavu', 'Doddakannelli'],
-  'Marathahalli': ['Marathahalli Bridge', 'Kundanahalli', 'Kariyanapalya', 'Garudachar Palya', 'Chellikere', 'Varthur Road', 'Thubarahalli', 'Munnekollala'],
-  'Electronic City': ['Phase 1', 'Phase 2', 'Doddathoguru', 'Konappana Agrahara', 'Neeladri Nagar', 'Hosur Road', 'Naganathapura', 'Hirehalli'],
-  'Sarjapur Road': ['Kaikondrahalli', 'Chikka Begur', 'Bellandur', 'Harlur', 'Doddenakundi', 'Gunjur', 'Somasundarapalya', 'Munnekollal'],
-  'Rajajinagar': ['1st Block', '2nd Block', '3rd Block', 'Nagarabhavi', 'Basaveshwara Nagar', 'Mahalaxmi Layout', 'Vijayanagar', 'Chord Road'],
+const locations: Record<string, string[]> = {
+  'Whitefield': ['ITPL Road', 'Viveknagar', 'Ramagondanahalli', 'Siddapura', 'Hope Farm Junction', 'Whitefield Main Road', 'Maheshwaram Nagar', 'Thubarahalli', 'Vydehi Hospital Road', 'Pattandur Agrahara', 'Sadaramangala', 'ITPL Gate 4'],
+  'Indiranagar': ['100 Feet Road', 'BMRCL Layout', 'CMH Road', 'HAL 2nd Stage', 'Defence Colony', 'Jeevanbhimanagar', 'New Thippasandra', 'Chinnappanahalli', 'Indiranagar 2nd Stage', 'Domlur Layout', 'Murugeshpalya', 'Binnamangala'],
+  'Koramangala': ['4th Block', '5th Block', '1st Block', '6th Block', 'ST Bed Layout', 'Jakkasandra', 'Siddapura', 'Koramangala Club Road', '3rd Block', '7th Block', 'Indiranagar Koramangala Junction', 'Srinivagilu'],
+  'HSR Layout': ['Sector 1', 'Sector 2', 'Sector 3', 'Sector 4', 'Sector 5', 'Sector 7', 'Bommanahalli', 'Agara', 'Kudlu', 'Parangipalya', 'Venkatapura', 'Mangammanapalya'],
+  'JP Nagar': ['1st Phase', '2nd Phase', '4th Phase', '6th Phase', '7th Phase', '8th Phase', 'Jayanagar 9th Block', 'Puttenahalli', 'Banashankari 3rd Stage', 'Raghavendra Nagar', 'BTM 1st Stage', 'Jakkasandra Extension'],
+  'BTM Layout': ['1st Stage', '2nd Stage', '2nd Stage Layout', 'Mico Layout', 'Arekere', 'Bannerghatta Road', 'Hulimavu', 'Doddakannelli', 'Kuvempu Nagar', 'NS Palya', 'Jaraganahalli', 'Padmanabhanagara'],
+  'Marathahalli': ['Marathahalli Bridge', 'Kundanahalli', 'Kariyanapalya', 'Garudachar Palya', 'Chellikere', 'Varthur Road', 'Thubarahalli', 'Munnekollala', 'Siddapura Cross', 'Aecs Layout', 'Brookefield', 'Kadubeesanahalli'],
+  'Electronic City': ['Phase 1', 'Phase 2', 'Doddathoguru', 'Konappana Agrahara', 'Neeladri Nagar', 'Hosur Road', 'Naganathapura', 'Hirehalli', 'Electronic City Phase 3', 'Hebbagodi', 'Vagata', 'Guddahatti'],
+  'Sarjapur Road': ['Kaikondrahalli', 'Chikka Begur', 'Bellandur', 'Harlur', 'Doddenakundi', 'Gunjur', 'Somasundarapalya', 'Munnekollal', 'Carmelaram', 'Ibbaluru', 'Kasavanahalli', 'Chikkanayakanahalli'],
+  'Rajajinagar': ['1st Block', '2nd Block', '3rd Block', 'Nagarabhavi', 'Basaveshwara Nagar', 'Mahalaxmi Layout', 'Vijayanagar', 'Chord Road', 'Malleswaram', 'Rajajinagar Industrial Area', 'Prakash Nagar', 'West of Chord Road'],
 }
 
-const firstNames = ['Ramesh', 'Suresh', 'Mahesh', 'Kiran', 'Vijay', 'Arjun', 'Sanjay', 'Deepak', 'Rahul', 'Amit', 'Priya', 'Sunita', 'Lakshmi', 'Kavitha', 'Deepa', 'Geetha', 'Pavithra', 'Anjali', 'Rekha', 'Bhagya', 'Mohammed', 'Irfan', 'Venkatesh', 'Krishna', 'Ravi', 'Anand', 'Naveen', 'Rajesh', 'Arun', 'Manoj', 'Sheela', 'Meena', 'Kamala', 'Usha', 'Padma', 'Shanti', 'Gowri', 'Nandini', 'Swathi', 'Divya']
-const lastNames = ['Kumar', 'Sharma', 'Reddy', 'Gowda', 'Rao', 'Naidu', 'Babu', 'Prasad', 'Murthy', 'Tiwari', 'Gupta', 'Singh', 'Patil', 'Das', 'Hegde', 'Shetty', 'Pai', 'Kulkarni', 'Bhat', 'Acharya']
+const firstNames = ['Ramesh', 'Suresh', 'Mahesh', 'Kiran', 'Vijay', 'Arjun', 'Sanjay', 'Deepak', 'Rahul', 'Amit', 'Priya', 'Sunita', 'Lakshmi', 'Kavitha', 'Deepa', 'Geetha', 'Pavithra', 'Anjali', 'Rekha', 'Bhagya', 'Mohammed', 'Irfan', 'Venkatesh', 'Krishna', 'Ravi', 'Anand', 'Naveen', 'Rajesh', 'Arun', 'Manoj', 'Sheela', 'Meena', 'Kamala', 'Usha', 'Padma', 'Shanti', 'Gowri', 'Nandini', 'Swathi', 'Divya', 'Harsha', 'Pooja', 'Rohit', 'Karthik', 'Vinay', 'Pradeep', 'Santosh', 'Girish', 'Prashanth', 'Satish']
+const lastNames = ['Kumar', 'Sharma', 'Reddy', 'Gowda', 'Rao', 'Naidu', 'Babu', 'Prasad', 'Murthy', 'Tiwari', 'Gupta', 'Singh', 'Patil', 'Das', 'Hegde', 'Shetty', 'Pai', 'Kulkarni', 'Bhat', 'Acharya', 'Jain', 'Mehta', 'Agarwal', 'Verma']
 
 function randomItem<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]
@@ -89,6 +89,43 @@ function randomTime(): string {
 
 const statuses = ['Open', 'Under Investigation', 'Closed', 'Charge Sheeted', 'Acquitted', 'Compromised']
 const priorities = ['Low', 'Medium', 'High', 'Critical']
+
+// Weighted: more property crime & cyber crime (realistic for Bangalore IT hub)
+const crimeWeights: Record<string, number> = {
+  'Theft': 18, 'Cyber Crime': 15, 'Vehicle Theft': 12, 'Chain Snatching': 10,
+  'Burglary': 8, 'Cheating': 8, 'Fraud': 7, 'Assault': 6,
+  'Domestic Violence': 5, 'Vandalism': 4, 'Drug Offense': 3,
+  'Robbery': 2, 'Murder': 1, 'Rape': 1, 'Kidnapping': 1,
+}
+
+function weightedRandomCrimeType(): typeof crimeTypes[0] {
+  const totalWeight = Object.values(crimeWeights).reduce((a, b) => a + b, 0)
+  let r = Math.random() * totalWeight
+  for (const ct of crimeTypes) {
+    r -= crimeWeights[ct.name] || 1
+    if (r <= 0) return ct
+  }
+  return crimeTypes[0]
+}
+
+// Weighted statuses - more realistic distribution
+function weightedStatus(): string {
+  const r = Math.random()
+  if (r < 0.15) return 'Open'
+  if (r < 0.35) return 'Under Investigation'
+  if (r < 0.60) return 'Closed'
+  if (r < 0.78) return 'Charge Sheeted'
+  if (r < 0.88) return 'Acquitted'
+  return 'Compromised'
+}
+
+function weightedPriority(): string {
+  const r = Math.random()
+  if (r < 0.25) return 'Low'
+  if (r < 0.60) return 'Medium'
+  if (r < 0.85) return 'High'
+  return 'Critical'
+}
 
 const caseDescriptions = [
   'Complainant reported that unknown accused stole their two-wheeler parked outside their residence during night hours.',
@@ -111,6 +148,17 @@ const caseDescriptions = [
   'Robbery at a convenience store. Armed individuals threatened the staff and fled with cash.',
   'Stalking and harassment complaint by a college student against an unidentified individual.',
   'Fraudulent insurance claim reported by the insurance company against the policy holder.',
+  'UPI fraud reported - victim scanned a fake QR code at a shop and lost Rs. 50,000 from their account.',
+  'Mobile phone snatching near the metro station by two individuals on a bike.',
+  'Online shopping fraud - victim paid for electronics on a fake e-commerce website, no delivery received.',
+  'Vehicle break-in reported at the apartment basement parking. Laptop and documents were stolen from the car.',
+  'Suspicious transaction alert - multiple unauthorized withdrawals from the victims savings account.',
+  'Complaint against unauthorized money lending with exorbitant interest rates threatening the complainant.',
+  'Petty theft at the local market - wallet and mobile phone stolen from the victims bag.',
+  'Social media impersonation - accused created a fake profile of the victim and extorted money from contacts.',
+  'Eve teasing complaint near the college campus. Three unidentified individuals have been reported.',
+  'Crypto scam - victim invested Rs. 5 lakhs in a fraudulent cryptocurrency scheme promoted on social media.',
+  'Domestic help accused of stealing jewelry and cash from the employers residence over several months.',
 ]
 
 async function seed() {
@@ -148,67 +196,89 @@ async function seed() {
   }
   console.log(`Created ${crimeTypes.length} crime types`)
 
-  // Create cases - generate ~200 cases spanning the last 2 years
+  // Create 800 cases spanning 2 years with realistic distribution
+  const TOTAL_CASES = 800
   const stationCodes = Object.keys(locations)
   const now = new Date()
   const twoYearsAgo = new Date(now.getFullYear() - 2, 0, 1)
 
-  for (let i = 0; i < 200; i++) {
-    const area = randomItem(stationCodes)
-    const loc = randomItem(locations[area as keyof typeof locations])
-    const stationCode = stations.find(s => s.area === area)!.stationCode
-    const crimeTypeObj = randomItem(crimeTypes)
-    const crimeTypeName = crimeTypeObj.name
-    const status = randomItem(statuses)
-    const priority = randomItem(priorities)
-    const incidentDate = randomDate(twoYearsAgo, now)
-    const filedDate = new Date(incidentDate.getTime() + Math.random() * 3 * 24 * 60 * 60 * 1000)
+  // Batch create for performance
+  const batchSize = 50
+  for (let batch = 0; batch < Math.ceil(TOTAL_CASES / batchSize); batch++) {
+    const cases: any[] = []
+    const start = batch * batchSize
+    const end = Math.min(start + batchSize, TOTAL_CASES)
 
-    const caseData: any = {
-      firNumber: `FIR/BLR/${incidentDate.getFullYear()}/${String(i + 1).padStart(4, '0')}`,
-      crimeTypeId: crimeTypeMap.get(crimeTypeName)!,
-      stationId: stationMap.get(stationCode)!,
-      status,
-      priority,
-      filedDate,
-      incidentDate,
-      incidentTime: randomTime(),
-      description: randomItem(caseDescriptions),
-      location: loc,
-      latitude: 12.9 + (Math.random() - 0.5) * 0.2,
-      longitude: 77.5 + (Math.random() - 0.5) * 0.3,
-      victimName: `${randomItem(firstNames)} ${randomItem(lastNames)}`,
-      victimAge: 18 + Math.floor(Math.random() * 55),
-      victimGender: Math.random() > 0.35 ? 'Male' : 'Female',
-    }
+    for (let i = start; i < end; i++) {
+      const area = randomItem(stationCodes)
+      const loc = randomItem(locations[area])
+      const stationCode = stations.find(s => s.area === area)!.stationCode
+      const crimeTypeObj = weightedRandomCrimeType()
+      const crimeTypeName = crimeTypeObj.name
+      const status = weightedStatus()
+      const priority = weightedPriority()
 
-    // 60% chance of having a suspect
-    if (Math.random() > 0.4) {
-      caseData.suspectName = `${randomItem(firstNames)} ${randomItem(lastNames)}`
-      caseData.suspectAge = 18 + Math.floor(Math.random() * 45)
-      caseData.suspectGender = Math.random() > 0.3 ? 'Male' : 'Female'
-    }
-
-    // Assign to officer if not Closed/Acquitted
-    if (status !== 'Closed' && status !== 'Acquitted') {
-      const stationOfficers = officers.filter(o => o.stationCode === stationCode)
-      const officer = randomItem(stationOfficers)
-      if (officer) {
-        caseData.assignedToId = officerMap.get(officer.badgeNumber)
+      // Weight recent dates more (40% in last 6 months, 30% 6-12 months, 30% 12-24 months)
+      let incidentDate: Date
+      const r = Math.random()
+      if (r < 0.4) {
+        incidentDate = randomDate(new Date(now.getTime() - 6 * 30 * 24 * 60 * 60 * 1000), now)
+      } else if (r < 0.7) {
+        incidentDate = randomDate(new Date(now.getTime() - 12 * 30 * 24 * 60 * 60 * 1000), new Date(now.getTime() - 6 * 30 * 24 * 60 * 60 * 1000))
+      } else {
+        incidentDate = randomDate(twoYearsAgo, new Date(now.getTime() - 12 * 30 * 24 * 60 * 60 * 1000))
       }
+
+      const filedDate = new Date(incidentDate.getTime() + Math.random() * 3 * 24 * 60 * 60 * 1000)
+
+      const caseData: any = {
+        firNumber: `FIR/BLR/${incidentDate.getFullYear()}/${String(i + 1).padStart(4, '0')}`,
+        crimeTypeId: crimeTypeMap.get(crimeTypeName)!,
+        stationId: stationMap.get(stationCode)!,
+        status,
+        priority,
+        filedDate,
+        incidentDate,
+        incidentTime: randomTime(),
+        description: randomItem(caseDescriptions),
+        location: `${loc}, ${area}`,
+        latitude: 12.9 + (Math.random() - 0.5) * 0.2,
+        longitude: 77.5 + (Math.random() - 0.5) * 0.3,
+        victimName: `${randomItem(firstNames)} ${randomItem(lastNames)}`,
+        victimAge: 18 + Math.floor(Math.random() * 55),
+        victimGender: Math.random() > 0.35 ? 'Male' : 'Female',
+      }
+
+      // 60% chance of having a suspect
+      if (Math.random() > 0.4) {
+        caseData.suspectName = `${randomItem(firstNames)} ${randomItem(lastNames)}`
+        caseData.suspectAge = 18 + Math.floor(Math.random() * 45)
+        caseData.suspectGender = Math.random() > 0.3 ? 'Male' : 'Female'
+      }
+
+      // Assign to officer if not Closed/Acquitted
+      if (status !== 'Closed' && status !== 'Acquitted') {
+        const stationOfficers = officers.filter(o => o.stationCode === stationCode)
+        const officer = randomItem(stationOfficers)
+        if (officer) {
+          caseData.assignedToId = officerMap.get(officer.badgeNumber)
+        }
+      }
+
+      // Resolved date for closed cases
+      if (status === 'Closed' || status === 'Charge Sheeted' || status === 'Acquitted') {
+        const resolveDays = Math.floor(Math.random() * 180) + 7
+        caseData.resolvedDate = new Date(filedDate.getTime() + resolveDays * 24 * 60 * 60 * 1000)
+      }
+
+      cases.push(caseData)
     }
 
-    // Resolved date for closed cases
-    if (status === 'Closed' || status === 'Charge Sheeted' || status === 'Acquitted') {
-      const resolveDays = Math.floor(Math.random() * 180) + 7
-      caseData.resolvedDate = new Date(filedDate.getTime() + resolveDays * 24 * 60 * 60 * 1000)
-    }
-
-    await prisma.case.create({ data: caseData })
+    await prisma.case.createMany({ data: cases })
+    console.log(`Created ${end} / ${TOTAL_CASES} cases`)
   }
 
-  console.log('Created 200 cases')
-  console.log('Seed complete!')
+  console.log(`Seed complete! ${TOTAL_CASES} cases across ${stations.length} stations`)
 }
 
 seed()
