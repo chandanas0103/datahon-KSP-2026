@@ -244,10 +244,30 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
   try {
     const body = await request.json();
-    const { question } = body;
+    const { question, sql: directSql, context } = body as {
+      question: string;
+      sql?: string;
+      context?: { role: string; content: string; sql?: string | null }[];
+    };
 
     if (!question || typeof question !== "string") {
       return NextResponse.json({ error: "A question is required." }, { status: 400 });
+    }
+
+    // ── SQL Playground mode: skip LLM, run SQL directly ──
+    if (question === "__playground__" && directSql) {
+      const validation = validateSQL(directSql);
+      if (!validation.valid) {
+        return NextResponse.json({ error: validation.reason, results: [] }, { status: 400 });
+      }
+      try {
+        const rawResults = await db.$queryRawUnsafe(directSql);
+        const results = serializeResults(rawResults as Record<string, unknown>[]);
+        return NextResponse.json({ answer: `Playground: ${results.length} rows returned.`, sql: directSql, results, confidence: "high", responseTime: Date.now() - startTime, followups: [] });
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        return NextResponse.json({ error: errMsg, results: [] }, { status: 400 });
+      }
     }
 
     // Step 1: Translate if needed (Kannada/Hindi → English)
@@ -279,8 +299,16 @@ export async function POST(request: NextRequest) {
     while (retries <= maxRetries) {
       // Generate SQL
       if (retries === 0) {
+        // Build context-aware prompt for multi-turn conversations
+        let contextHint = "";
+        if (context && context.length > 0) {
+          const recentPairs = context.slice(-4);
+          contextHint = "\n\nCONVERSATION CONTEXT (previous Q&A for follow-up awareness):\n" +
+            recentPairs.map((c, i) => `${c.role === "user" ? "User" : "Assistant"}: ${c.content}${c.sql ? `\nSQL used: ${c.sql}` : ""}`).join("\n") +
+            "\n\nUse the conversation context to understand follow-up questions. For example, if the user asks 'show me more', refer to the previous query's topic.";
+        }
         sql = cleanSQL(await callLLM(
-          [{ role: "assistant", content: SCHEMA_CONTEXT }, { role: "user", content: translatedQuestion }],
+          [{ role: "assistant", content: SCHEMA_CONTEXT + contextHint }, { role: "user", content: translatedQuestion }],
           0.1
         ));
       } else {
