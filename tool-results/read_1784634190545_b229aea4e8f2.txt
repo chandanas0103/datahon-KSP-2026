@@ -366,7 +366,7 @@
    366→        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={onToggle} />
    367→      )}
    368→      {/* Sidebar */}
-   369→      <aside className={`fixed lg:relative z-50 lg:z-auto top-0 left-0 h-full w-72 flex-shrink-0 border-r bg-card/95 backdrop-blur-lg transition-transform duration-300 ease-in-out lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+   369→      <aside className={`fixed lg:relative z-50 lg:z-auto top-0 left-0 h-full w-72 flex-shrink-0 border-r bg-card/95 backdrop-blur-lg transition-transform duration-300 ease-in-out ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
    370→        <div className="flex flex-col h-full">
    371→          <div className="p-4 border-b flex items-center justify-between">
    372→            <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
@@ -426,347 +426,351 @@
    426→  const [isListening, setIsListening] = useState(false)
    427→  const [stats, setStats] = useState<Stats | null>(null)
    428→  const [history, setHistory] = useState<HistoryItem[]>([])
-   429→  const [sidebarOpen, setSidebarOpen] = useState(false)
-   430→  const [voiceLang, setVoiceLang] = useState<'kn-IN' | 'hi-IN' | 'en-IN'>('kn-IN')
-   431→  const scrollRef = useRef<HTMLDivElement>(null)
-   432→  const textareaRef = useRef<HTMLTextAreaElement>(null)
-   433→  const recognitionRef = useRef<SpeechRecognition | null>(null)
-   434→
-   435→  useEffect(() => { fetch('/api/stats').then(r => r.json()).then(setStats).catch(() => {}) }, [])
-   436→  useEffect(() => { fetch('/api/history').then(r => r.json()).then(setHistory).catch(() => {}) }, [])
-   437→  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight }, [messages])
+   429→  const [sidebarOpen, setSidebarOpen] = useState(true)
+   430→  // Close sidebar by default on mobile
+   431→  useEffect(() => {
+   432→    if (window.innerWidth < 1024) setSidebarOpen(false)
+   433→  }, [])
+   434→  const [voiceLang, setVoiceLang] = useState<'kn-IN' | 'hi-IN' | 'en-IN'>('kn-IN')
+   435→  const scrollRef = useRef<HTMLDivElement>(null)
+   436→  const textareaRef = useRef<HTMLTextAreaElement>(null)
+   437→  const recognitionRef = useRef<SpeechRecognition | null>(null)
    438→
-   439→  // Refresh history after each new assistant message
-   440→  const lastMsg = messages[messages.length - 1]
-   441→  useEffect(() => {
-   442→    if (messages.length > 0 && lastMsg?.role === 'assistant' && !lastMsg?.isLoading) {
-   443→      fetch('/api/history').then(r => r.json()).then(setHistory).catch(() => {})
-   444→    }
-   445→  }, [messages.length, lastMsg?.role, lastMsg?.isLoading])
-   446→
-   447→  const sendMessage = useCallback(async (question: string) => {
-   448→    if (!question.trim() || isSending) return
-   449→    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: question.trim() }
-   450→    const loadingMsg: Message = { id: crypto.randomUUID(), role: 'assistant', content: '', isLoading: true }
-   451→    setMessages((prev) => [...prev, userMsg, loadingMsg])
-   452→    setInput('')
-   453→    setIsSending(true)
-   454→    try {
-   455→      const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: question.trim() }) })
-   456→      const data = await res.json()
-   457→      const assistantMsg: Message = {
-   458→        id: crypto.randomUUID(),
-   459→        role: 'assistant',
-   460→        content: data.answer || 'No response generated.',
-   461→        sql: data.sql || null,
-   462→        results: data.results || [],
-   463→        error: data.error,
-   464→        confidence: data.confidence || 'medium',
-   465→        translatedQuestion: data.translatedQuestion || null,
-   466→        responseTime: data.responseTime || 0,
-   467→        followups: data.followups || [],
-   468→        selfHealed: data.selfHealed || false,
-   469→        retryCount: data.retryCount || 0,
-   470→      }
-   471→      setMessages((prev) => [...prev.slice(0, -1), assistantMsg])
-   472→    } catch {
-   473→      setMessages((prev) => [...prev.slice(0, -1), {
-   474→        id: crypto.randomUUID(), role: 'assistant',
-   475→        content: 'Failed to connect to the server. Please check your connection and try again.',
-   476→        error: 'Network error',
-   477→      }])
-   478→    } finally { setIsSending(false) }
-   479→  }, [isSending])
-   480→
-   481→  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-   482→    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input) }
-   483→  }, [input, sendMessage])
+   439→  useEffect(() => { fetch('/api/stats').then(r => r.json()).then(setStats).catch(() => {}) }, [])
+   440→  useEffect(() => { fetch('/api/history').then(r => r.json()).then(setHistory).catch(() => {}) }, [])
+   441→  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight }, [messages])
+   442→
+   443→  // Refresh history after each new assistant message
+   444→  const lastMsg = messages[messages.length - 1]
+   445→  useEffect(() => {
+   446→    if (messages.length > 0 && lastMsg?.role === 'assistant' && !lastMsg?.isLoading) {
+   447→      fetch('/api/history').then(r => r.json()).then(setHistory).catch(() => {})
+   448→    }
+   449→  }, [messages.length, lastMsg?.role, lastMsg?.isLoading])
+   450→
+   451→  const sendMessage = useCallback(async (question: string) => {
+   452→    if (!question.trim() || isSending) return
+   453→    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: question.trim() }
+   454→    const loadingMsg: Message = { id: crypto.randomUUID(), role: 'assistant', content: '', isLoading: true }
+   455→    setMessages((prev) => [...prev, userMsg, loadingMsg])
+   456→    setInput('')
+   457→    setIsSending(true)
+   458→    try {
+   459→      const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: question.trim() }) })
+   460→      const data = await res.json()
+   461→      const assistantMsg: Message = {
+   462→        id: crypto.randomUUID(),
+   463→        role: 'assistant',
+   464→        content: data.answer || 'No response generated.',
+   465→        sql: data.sql || null,
+   466→        results: data.results || [],
+   467→        error: data.error,
+   468→        confidence: data.confidence || 'medium',
+   469→        translatedQuestion: data.translatedQuestion || null,
+   470→        responseTime: data.responseTime || 0,
+   471→        followups: data.followups || [],
+   472→        selfHealed: data.selfHealed || false,
+   473→        retryCount: data.retryCount || 0,
+   474→      }
+   475→      setMessages((prev) => [...prev.slice(0, -1), assistantMsg])
+   476→    } catch {
+   477→      setMessages((prev) => [...prev.slice(0, -1), {
+   478→        id: crypto.randomUUID(), role: 'assistant',
+   479→        content: 'Failed to connect to the server. Please check your connection and try again.',
+   480→        error: 'Network error',
+   481→      }])
+   482→    } finally { setIsSending(false) }
+   483→  }, [isSending])
    484→
-   485→  // Voice input with language cycling
-   486→  const toggleVoice = useCallback(() => {
-   487→    if (typeof window === 'undefined' || !('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) return
-   488→    if (isListening) {
-   489→      recognitionRef.current?.stop()
-   490→      setIsListening(false)
-   491→      return
-   492→    }
-   493→    const SR = (window as unknown as { SpeechRecognition: typeof SpeechRecognition; webkitSpeechRecognition: typeof SpeechRecognition }).SpeechRecognition || (window as unknown as { webkitSpeechRecognition: typeof SpeechRecognition }).webkitSpeechRecognition
-   494→    const recognition = new SR()
-   495→    recognition.continuous = false
-   496→    recognition.interimResults = false
-   497→    recognition.lang = voiceLang
-   498→    recognition.onresult = (event: SpeechRecognitionEvent) => {
-   499→      const transcript = event.results[0][0].transcript
-   500→      setInput(transcript)
-   501→      setIsListening(false)
-   502→    }
-   503→    recognition.onerror = () => setIsListening(false)
-   504→    recognition.onend = () => setIsListening(false)
-   505→    recognitionRef.current = recognition
-   506→    recognition.start()
-   507→    setIsListening(true)
-   508→  }, [isListening, voiceLang])
-   509→
-   510→  const cycleVoiceLang = useCallback(() => {
-   511→    const langs: Array<'kn-IN' | 'hi-IN' | 'en-IN'> = ['kn-IN', 'hi-IN', 'en-IN']
-   512→    const labels = { 'kn-IN': 'KN', 'hi-IN': 'HI', 'en-IN': 'EN' }
-   513→    const idx = langs.indexOf(voiceLang)
-   514→    const next = langs[(idx + 1) % langs.length]
-   515→    setVoiceLang(next)
-   516→  }, [voiceLang])
-   517→
-   518→  // PDF Export
-   519→  const handleExport = useCallback((msg: Message, question: string) => {
-   520→    fetch('/api/export-pdf', {
-   521→      method: 'POST',
-   522→      headers: { 'Content-Type': 'application/json' },
-   523→      body: JSON.stringify({
-   524→        question,
-   525→        answer: msg.content,
-   526→        sql: msg.sql,
-   527→        results: msg.results,
-   528→        confidence: msg.confidence,
-   529→        responseTime: msg.responseTime,
-   530→      }),
-   531→    })
-   532→    .then(res => res.blob())
-   533→    .then(blob => {
-   534→      const url = URL.createObjectURL(blob)
-   535→      const a = document.createElement('a')
-   536→      a.href = url
-   537→      a.download = `ksp-crime-report-${new Date().toISOString().slice(0, 10)}.html`
-   538→      document.body.appendChild(a)
-   539→      a.click()
-   540→      document.body.removeChild(a)
-   541→      URL.revokeObjectURL(url)
-   542→    })
-   543→    .catch(() => {
-   544→      // Fallback to print
-   545→      window.print()
+   485→  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+   486→    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input) }
+   487→  }, [input, sendMessage])
+   488→
+   489→  // Voice input with language cycling
+   490→  const toggleVoice = useCallback(() => {
+   491→    if (typeof window === 'undefined' || !('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) return
+   492→    if (isListening) {
+   493→      recognitionRef.current?.stop()
+   494→      setIsListening(false)
+   495→      return
+   496→    }
+   497→    const SR = (window as unknown as { SpeechRecognition: typeof SpeechRecognition; webkitSpeechRecognition: typeof SpeechRecognition }).SpeechRecognition || (window as unknown as { webkitSpeechRecognition: typeof SpeechRecognition }).webkitSpeechRecognition
+   498→    const recognition = new SR()
+   499→    recognition.continuous = false
+   500→    recognition.interimResults = false
+   501→    recognition.lang = voiceLang
+   502→    recognition.onresult = (event: SpeechRecognitionEvent) => {
+   503→      const transcript = event.results[0][0].transcript
+   504→      setInput(transcript)
+   505→      setIsListening(false)
+   506→    }
+   507→    recognition.onerror = () => setIsListening(false)
+   508→    recognition.onend = () => setIsListening(false)
+   509→    recognitionRef.current = recognition
+   510→    recognition.start()
+   511→    setIsListening(true)
+   512→  }, [isListening, voiceLang])
+   513→
+   514→  const cycleVoiceLang = useCallback(() => {
+   515→    const langs: Array<'kn-IN' | 'hi-IN' | 'en-IN'> = ['kn-IN', 'hi-IN', 'en-IN']
+   516→    const labels = { 'kn-IN': 'KN', 'hi-IN': 'HI', 'en-IN': 'EN' }
+   517→    const idx = langs.indexOf(voiceLang)
+   518→    const next = langs[(idx + 1) % langs.length]
+   519→    setVoiceLang(next)
+   520→  }, [voiceLang])
+   521→
+   522→  // PDF Export
+   523→  const handleExport = useCallback((msg: Message, question: string) => {
+   524→    fetch('/api/export-pdf', {
+   525→      method: 'POST',
+   526→      headers: { 'Content-Type': 'application/json' },
+   527→      body: JSON.stringify({
+   528→        question,
+   529→        answer: msg.content,
+   530→        sql: msg.sql,
+   531→        results: msg.results,
+   532→        confidence: msg.confidence,
+   533→        responseTime: msg.responseTime,
+   534→      }),
+   535→    })
+   536→    .then(res => res.blob())
+   537→    .then(blob => {
+   538→      const url = URL.createObjectURL(blob)
+   539→      const a = document.createElement('a')
+   540→      a.href = url
+   541→      a.download = `ksp-crime-report-${new Date().toISOString().slice(0, 10)}.html`
+   542→      document.body.appendChild(a)
+   543→      a.click()
+   544→      document.body.removeChild(a)
+   545→      URL.revokeObjectURL(url)
    546→    })
-   547→  }, [])
-   548→
-   549→  const clearChat = useCallback(() => { setMessages([]) }, [])
-   550→
-   551→  const voiceLangLabel = { 'kn-IN': 'KN', 'hi-IN': 'HI', 'en-IN': 'EN' }[voiceLang]
+   547→    .catch(() => {
+   548→      // Fallback to print
+   549→      window.print()
+   550→    })
+   551→  }, [])
    552→
-   553→  return (
-   554→    <TooltipProvider>
-   555→      <div className="h-screen flex bg-background overflow-hidden">
-   556→        {/* Sidebar */}
-   557→        <HistorySidebar
-   558→          history={history}
-   559→          onQuery={sendMessage}
-   560→          isOpen={sidebarOpen}
-   561→          onToggle={() => setSidebarOpen(!sidebarOpen)}
-   562→        />
-   563→
-   564→        {/* Main Content */}
-   565→        <div className="flex-1 flex flex-col min-w-0">
-   566→          {/* Header */}
-   567→          <header className="no-print flex-shrink-0 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-30">
-   568→            <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-   569→              <div className="flex items-center gap-3">
-   570→                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSidebarOpen(!sidebarOpen)}>
-   571→                  {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
-   572→                </Button>
-   573→                <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-md shadow-primary/20">
-   574→                  <Shield className="h-4.5 w-4.5 text-primary-foreground" />
-   575→                </div>
-   576→                <div>
-   577→                  <h1 className="text-sm font-semibold leading-tight">KSP Crime Intelligence</h1>
-   578→                  <p className="text-[10px] text-muted-foreground">Conversational AI for Crime Database</p>
+   553→  const clearChat = useCallback(() => { setMessages([]) }, [])
+   554→
+   555→  const voiceLangLabel = { 'kn-IN': 'KN', 'hi-IN': 'HI', 'en-IN': 'EN' }[voiceLang]
+   556→
+   557→  return (
+   558→    <TooltipProvider>
+   559→      <div className="h-screen flex bg-background overflow-hidden">
+   560→        {/* Sidebar */}
+   561→        <HistorySidebar
+   562→          history={history}
+   563→          onQuery={sendMessage}
+   564→          isOpen={sidebarOpen}
+   565→          onToggle={() => setSidebarOpen(!sidebarOpen)}
+   566→        />
+   567→
+   568→        {/* Main Content */}
+   569→        <div className="flex-1 flex flex-col min-w-0">
+   570→          {/* Header */}
+   571→          <header className="no-print flex-shrink-0 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-30">
+   572→            <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+   573→              <div className="flex items-center gap-3">
+   574→                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSidebarOpen(!sidebarOpen)}>
+   575→                  {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
+   576→                </Button>
+   577→                <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-md shadow-primary/20">
+   578→                  <Shield className="h-4.5 w-4.5 text-primary-foreground" />
    579→                </div>
-   580→              </div>
-   581→              <div className="flex items-center gap-2">
-   582→                <Tooltip>
-   583→                  <TooltipTrigger asChild>
-   584→                    <a href="/about" className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 px-2 py-1 rounded-md hover:bg-muted/50">
-   585→                      <FileText className="h-3 w-3" />About
-   586→                    </a>
-   587→                  </TooltipTrigger>
-   588→                  <TooltipContent>Architecture & features</TooltipContent>
-   589→                </Tooltip>
-   590→                {messages.length > 0 && (
-   591→                  <Tooltip>
-   592→                    <TooltipTrigger asChild>
-   593→                      <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground gap-1" onClick={clearChat}>
-   594→                        <X className="h-3 w-3" />Clear
-   595→                      </Button>
-   596→                    </TooltipTrigger>
-   597→                    <TooltipContent>Clear conversation</TooltipContent>
-   598→                  </Tooltip>
-   599→                )}
-   600→              </div>
-   601→            </div>
-   602→          </header>
-   603→
-   604→          {/* Messages Area */}
-   605→          <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
-   606→            <div className="max-w-3xl mx-auto">
-   607→              {messages.length === 0 ? (
-   608→                <div className="flex flex-col items-center justify-center min-h-[65vh] text-center space-y-6">
-   609→                  <div className="relative">
-   610→                    <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-   611→                      <MessageSquare className="h-8 w-8 text-primary" />
-   612→                    </div>
-   613→                    <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
-   614→                      <Zap className="h-3 w-3 text-white" />
-   615→                    </div>
-   616→                  </div>
-   617→                  <div className="space-y-2">
-   618→                    <h2 className="text-2xl font-bold tracking-tight">Ask anything about crime data</h2>
-   619→                    <p className="text-sm text-muted-foreground max-w-lg mx-auto">
-   620→                      Query the Karnataka State Police crime database using natural language.
-   621→                      Get instant answers with charts, confidence scores, and exportable reports.
-   622→                    </p>
-   623→                  </div>
-   624→                  <div className="flex flex-wrap justify-center gap-2">
-   625→                    <FeaturePill icon={ShieldCheck} label="Self-healing SQL" />
-   626→                    <FeaturePill icon={Languages} label="Multilingual (EN/KN/HI)" />
-   627→                    <FeaturePill icon={ShieldQuestion} label="Confidence Scoring" />
-   628→                    <FeaturePill icon={Mic} label="Voice Input" />
-   629→                    <FeaturePill icon={FileText} label="Report Export" />
-   630→                    <FeaturePill icon={Sparkles} label="Smart Follow-ups" />
-   631→                  </div>
-   632→                  {stats && <DashboardStats stats={stats} />}
-   633→                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-2xl mt-2">
-   634→                    {SAMPLE_QUESTIONS.slice(0, 6).map((q, i) => (
-   635→                      <button key={q} onClick={() => sendMessage(q)} className="text-left text-sm px-4 py-3 rounded-xl border border-border/50 bg-card hover:bg-muted/50 hover:border-border transition-all duration-200 group animate-in fade-in slide-in-from-bottom-2" style={{ animationDelay: `${i * 50}ms`, animationFillMode: 'backwards' }}>
-   636→                        <span className="flex items-start gap-2">
-   637→                          <Sparkles className="h-4 w-4 text-primary/60 mt-0.5 flex-shrink-0 group-hover:text-primary transition-colors" />
-   638→                          <span className="text-foreground/80 group-hover:text-foreground transition-colors">{q}</span>
-   639→                        </span>
-   640→                      </button>
-   641→                    ))}
-   642→                  </div>
-   643→                </div>
-   644→              ) : (
-   645→                <div className="space-y-6">
-   646→                  {messages.map((msg, idx) => {
-   647→                    const userQ = msg.role === 'assistant' && idx > 0 && messages[idx - 1]?.role === 'user'
-   648→                      ? messages[idx - 1].content : msg.content
-   649→                    return (
-   650→                    <MessageBubble
-   651→                      key={msg.id}
-   652→                      message={msg}
-   653→                      userQuestion={userQ}
-   654→                      onFollowup={sendMessage}
-   655→                      onExport={() => handleExport(msg, userQ)}
-   656→                    />
-   657→                    )
-   658→                  })}
-   659→                </div>
-   660→              )}
-   661→            </div>
-   662→          </div>
-   663→
-   664→          {/* Follow-up Quick Bar */}
-   665→          {messages.length > 0 && !lastMsg?.isLoading && lastMsg?.followups && lastMsg.followups!.length > 0 && (
-   666→            <div className="no-print px-4 sm:px-6 pb-1">
-   667→              <div className="max-w-3xl mx-auto">
-   668→                <ScrollArea className="w-full">
-   669→                  <div className="flex gap-1.5 pb-1">
-   670→                    {lastMsg.followups!.map((fq) => (
-   671→                      <button key={fq} onClick={() => sendMessage(fq)} className="flex-shrink-0 text-xs px-3 py-1.5 rounded-full border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-colors whitespace-nowrap flex items-center gap-1">
-   672→                        <ArrowRight className="h-3 w-3" />{fq}
-   673→                      </button>
-   674→                    ))}
-   675→                  </div>
-   676→                </ScrollArea>
-   677→              </div>
-   678→            </div>
-   679→          )}
-   680→
-   681→          {/* Sample Questions Quick Bar (when in conversation) */}
-   682→          {messages.length > 0 && (
-   683→            <div className="no-print px-4 sm:px-6 pb-1">
-   684→              <div className="max-w-3xl mx-auto">
-   685→                <ScrollArea className="w-full">
-   686→                  <div className="flex gap-1.5 pb-1">
-   687→                    {SAMPLE_QUESTIONS.slice(0, 10).map((q) => (
-   688→                      <button key={q} onClick={() => sendMessage(q)} className="flex-shrink-0 text-[11px] px-2.5 py-1 rounded-full border border-border/50 bg-muted/30 hover:bg-muted/60 transition-colors whitespace-nowrap">{q}</button>
-   689→                    ))}
-   690→                  </div>
-   691→                </ScrollArea>
-   692→              </div>
-   693→            </div>
-   694→          )}
-   695→
-   696→          {/* Input Area */}
-   697→          <div className="no-print flex-shrink-0 px-4 sm:px-6 pb-4 pt-2 bg-gradient-to-t from-background via-background to-transparent">
-   698→            <div className="max-w-3xl mx-auto">
-   699→              <Card className="shadow-lg shadow-primary/5 border-border/50">
-   700→                <CardContent className="p-3">
-   701→                  <div className="flex gap-2 items-end">
-   702→                    <Textarea
-   703→                      ref={textareaRef}
-   704→                      value={input}
-   705→                      onChange={(e) => setInput(e.target.value)}
-   706→                      onKeyDown={handleKeyDown}
-   707→                      placeholder="Ask in English, Kannada, or Hindi..."
-   708→                      className="min-h-[44px] max-h-[120px] resize-none border-0 focus-visible:ring-0 bg-transparent text-sm"
-   709→                      rows={1}
-   710→                      disabled={isSending}
-   711→                    />
-   712→                    <div className="flex flex-col gap-1">
-   713→                      <Tooltip>
-   714→                        <TooltipTrigger asChild>
-   715→                          <Button
-   716→                            variant={isListening ? 'destructive' : 'ghost'}
-   717→                            size="icon"
-   718→                            onClick={toggleVoice}
-   719→                            disabled={isSending}
-   720→                            className="h-10 w-10 rounded-xl relative"
-   721→                          >
-   722→                            {isListening ? (
-   723→                              <><MicOff className="h-4 w-4" /><span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-ping" /></>) : <Mic className="h-4 w-4" />}
-   724→                          </Button>
-   725→                        </TooltipTrigger>
-   726→                        <TooltipContent>
-   727→                          <div className="flex flex-col gap-1">
-   728→                            <span>{isListening ? 'Stop listening' : 'Voice input'}</span>
-   729→                            <span className="text-[10px] text-muted-foreground">Click mic icon to cycle: KN → HI → EN</span>
-   730→                          </div>
-   731→                        </TooltipContent>
-   732→                      </Tooltip>
-   733→                      <Tooltip>
-   734→                        <TooltipTrigger asChild>
-   735→                          <Button
-   736→                            variant="ghost"
-   737→                            size="sm"
-   738→                            onClick={cycleVoiceLang}
-   739→                            disabled={isSending}
-   740→                            className="h-5 px-1.5 text-[9px] text-muted-foreground/60 hover:text-foreground"
-   741→                          >
-   742→                            {voiceLangLabel}
-   743→                          </Button>
-   744→                        </TooltipTrigger>
-   745→                        <TooltipContent>Language: {voiceLang === 'kn-IN' ? 'Kannada' : voiceLang === 'hi-IN' ? 'Hindi' : 'English'}</TooltipContent>
-   746→                      </Tooltip>
-   747→                    </div>
-   748→                    <Button
-   749→                      size="icon"
-   750→                      onClick={() => sendMessage(input)}
-   751→                      disabled={!input.trim() || isSending}
-   752→                      className="flex-shrink-0 h-10 w-10 rounded-xl"
-   753→                    >
-   754→                      {isSending ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Send className="h-4 w-4" />}
-   755→                    </Button>
-   756→                  </div>
-   757→                </CardContent>
-   758→              </Card>
-   759→              <div className="flex items-center justify-center gap-3 mt-2 text-[10px] text-muted-foreground/40">
-   760→                <span className="flex items-center gap-1"><Shield className="h-2.5 w-2.5" />KSP Datathon 2026</span>
-   761→                <span className="text-border">|</span>
-   762→                <span className="flex items-center gap-1"><RefreshCw className="h-2.5 w-2.5" />Self-healing SQL</span>
-   763→                <span className="text-border">|</span>
-   764→                <span>All queries logged</span>
-   765→              </div>
-   766→            </div>
-   767→          </div>
-   768→        </div>
-   769→      </div>
-   770→    </TooltipProvider>
-   771→  )
-   772→}
+   580→                <div>
+   581→                  <h1 className="text-sm font-semibold leading-tight">KSP Crime Intelligence</h1>
+   582→                  <p className="text-[10px] text-muted-foreground">Conversational AI for Crime Database</p>
+   583→                </div>
+   584→              </div>
+   585→              <div className="flex items-center gap-2">
+   586→                <Tooltip>
+   587→                  <TooltipTrigger asChild>
+   588→                    <a href="/about" className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 px-2 py-1 rounded-md hover:bg-muted/50">
+   589→                      <FileText className="h-3 w-3" />About
+   590→                    </a>
+   591→                  </TooltipTrigger>
+   592→                  <TooltipContent>Architecture & features</TooltipContent>
+   593→                </Tooltip>
+   594→                {messages.length > 0 && (
+   595→                  <Tooltip>
+   596→                    <TooltipTrigger asChild>
+   597→                      <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground gap-1" onClick={clearChat}>
+   598→                        <X className="h-3 w-3" />Clear
+   599→                      </Button>
+   600→                    </TooltipTrigger>
+   601→                    <TooltipContent>Clear conversation</TooltipContent>
+   602→                  </Tooltip>
+   603→                )}
+   604→              </div>
+   605→            </div>
+   606→          </header>
+   607→
+   608→          {/* Messages Area */}
+   609→          <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
+   610→            <div className="max-w-3xl mx-auto">
+   611→              {messages.length === 0 ? (
+   612→                <div className="flex flex-col items-center justify-center min-h-[65vh] text-center space-y-6">
+   613→                  <div className="relative">
+   614→                    <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+   615→                      <MessageSquare className="h-8 w-8 text-primary" />
+   616→                    </div>
+   617→                    <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+   618→                      <Zap className="h-3 w-3 text-white" />
+   619→                    </div>
+   620→                  </div>
+   621→                  <div className="space-y-2">
+   622→                    <h2 className="text-2xl font-bold tracking-tight">Ask anything about crime data</h2>
+   623→                    <p className="text-sm text-muted-foreground max-w-lg mx-auto">
+   624→                      Query the Karnataka State Police crime database using natural language.
+   625→                      Get instant answers with charts, confidence scores, and exportable reports.
+   626→                    </p>
+   627→                  </div>
+   628→                  <div className="flex flex-wrap justify-center gap-2">
+   629→                    <FeaturePill icon={ShieldCheck} label="Self-healing SQL" />
+   630→                    <FeaturePill icon={Languages} label="Multilingual (EN/KN/HI)" />
+   631→                    <FeaturePill icon={ShieldQuestion} label="Confidence Scoring" />
+   632→                    <FeaturePill icon={Mic} label="Voice Input" />
+   633→                    <FeaturePill icon={FileText} label="Report Export" />
+   634→                    <FeaturePill icon={Sparkles} label="Smart Follow-ups" />
+   635→                  </div>
+   636→                  {stats && <DashboardStats stats={stats} />}
+   637→                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-2xl mt-2">
+   638→                    {SAMPLE_QUESTIONS.slice(0, 6).map((q, i) => (
+   639→                      <button key={q} onClick={() => sendMessage(q)} className="text-left text-sm px-4 py-3 rounded-xl border border-border/50 bg-card hover:bg-muted/50 hover:border-border transition-all duration-200 group animate-in fade-in slide-in-from-bottom-2" style={{ animationDelay: `${i * 50}ms`, animationFillMode: 'backwards' }}>
+   640→                        <span className="flex items-start gap-2">
+   641→                          <Sparkles className="h-4 w-4 text-primary/60 mt-0.5 flex-shrink-0 group-hover:text-primary transition-colors" />
+   642→                          <span className="text-foreground/80 group-hover:text-foreground transition-colors">{q}</span>
+   643→                        </span>
+   644→                      </button>
+   645→                    ))}
+   646→                  </div>
+   647→                </div>
+   648→              ) : (
+   649→                <div className="space-y-6">
+   650→                  {messages.map((msg, idx) => {
+   651→                    const userQ = msg.role === 'assistant' && idx > 0 && messages[idx - 1]?.role === 'user'
+   652→                      ? messages[idx - 1].content : msg.content
+   653→                    return (
+   654→                    <MessageBubble
+   655→                      key={msg.id}
+   656→                      message={msg}
+   657→                      userQuestion={userQ}
+   658→                      onFollowup={sendMessage}
+   659→                      onExport={() => handleExport(msg, userQ)}
+   660→                    />
+   661→                    )
+   662→                  })}
+   663→                </div>
+   664→              )}
+   665→            </div>
+   666→          </div>
+   667→
+   668→          {/* Follow-up Quick Bar */}
+   669→          {messages.length > 0 && !lastMsg?.isLoading && lastMsg?.followups && lastMsg.followups!.length > 0 && (
+   670→            <div className="no-print px-4 sm:px-6 pb-1">
+   671→              <div className="max-w-3xl mx-auto">
+   672→                <ScrollArea className="w-full">
+   673→                  <div className="flex gap-1.5 pb-1">
+   674→                    {lastMsg.followups!.map((fq) => (
+   675→                      <button key={fq} onClick={() => sendMessage(fq)} className="flex-shrink-0 text-xs px-3 py-1.5 rounded-full border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-colors whitespace-nowrap flex items-center gap-1">
+   676→                        <ArrowRight className="h-3 w-3" />{fq}
+   677→                      </button>
+   678→                    ))}
+   679→                  </div>
+   680→                </ScrollArea>
+   681→              </div>
+   682→            </div>
+   683→          )}
+   684→
+   685→          {/* Sample Questions Quick Bar (when in conversation) */}
+   686→          {messages.length > 0 && (
+   687→            <div className="no-print px-4 sm:px-6 pb-1">
+   688→              <div className="max-w-3xl mx-auto">
+   689→                <ScrollArea className="w-full">
+   690→                  <div className="flex gap-1.5 pb-1">
+   691→                    {SAMPLE_QUESTIONS.slice(0, 10).map((q) => (
+   692→                      <button key={q} onClick={() => sendMessage(q)} className="flex-shrink-0 text-[11px] px-2.5 py-1 rounded-full border border-border/50 bg-muted/30 hover:bg-muted/60 transition-colors whitespace-nowrap">{q}</button>
+   693→                    ))}
+   694→                  </div>
+   695→                </ScrollArea>
+   696→              </div>
+   697→            </div>
+   698→          )}
+   699→
+   700→          {/* Input Area */}
+   701→          <div className="no-print flex-shrink-0 px-4 sm:px-6 pb-4 pt-2 bg-gradient-to-t from-background via-background to-transparent">
+   702→            <div className="max-w-3xl mx-auto">
+   703→              <Card className="shadow-lg shadow-primary/5 border-border/50">
+   704→                <CardContent className="p-3">
+   705→                  <div className="flex gap-2 items-end">
+   706→                    <Textarea
+   707→                      ref={textareaRef}
+   708→                      value={input}
+   709→                      onChange={(e) => setInput(e.target.value)}
+   710→                      onKeyDown={handleKeyDown}
+   711→                      placeholder="Ask in English, Kannada, or Hindi..."
+   712→                      className="min-h-[44px] max-h-[120px] resize-none border-0 focus-visible:ring-0 bg-transparent text-sm"
+   713→                      rows={1}
+   714→                      disabled={isSending}
+   715→                    />
+   716→                    <div className="flex flex-col gap-1">
+   717→                      <Tooltip>
+   718→                        <TooltipTrigger asChild>
+   719→                          <Button
+   720→                            variant={isListening ? 'destructive' : 'ghost'}
+   721→                            size="icon"
+   722→                            onClick={toggleVoice}
+   723→                            disabled={isSending}
+   724→                            className="h-10 w-10 rounded-xl relative"
+   725→                          >
+   726→                            {isListening ? (
+   727→                              <><MicOff className="h-4 w-4" /><span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-ping" /></>) : <Mic className="h-4 w-4" />}
+   728→                          </Button>
+   729→                        </TooltipTrigger>
+   730→                        <TooltipContent>
+   731→                          <div className="flex flex-col gap-1">
+   732→                            <span>{isListening ? 'Stop listening' : 'Voice input'}</span>
+   733→                            <span className="text-[10px] text-muted-foreground">Click mic icon to cycle: KN → HI → EN</span>
+   734→                          </div>
+   735→                        </TooltipContent>
+   736→                      </Tooltip>
+   737→                      <Tooltip>
+   738→                        <TooltipTrigger asChild>
+   739→                          <Button
+   740→                            variant="ghost"
+   741→                            size="sm"
+   742→                            onClick={cycleVoiceLang}
+   743→                            disabled={isSending}
+   744→                            className="h-5 px-1.5 text-[9px] text-muted-foreground/60 hover:text-foreground"
+   745→                          >
+   746→                            {voiceLangLabel}
+   747→                          </Button>
+   748→                        </TooltipTrigger>
+   749→                        <TooltipContent>Language: {voiceLang === 'kn-IN' ? 'Kannada' : voiceLang === 'hi-IN' ? 'Hindi' : 'English'}</TooltipContent>
+   750→                      </Tooltip>
+   751→                    </div>
+   752→                    <Button
+   753→                      size="icon"
+   754→                      onClick={() => sendMessage(input)}
+   755→                      disabled={!input.trim() || isSending}
+   756→                      className="flex-shrink-0 h-10 w-10 rounded-xl"
+   757→                    >
+   758→                      {isSending ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Send className="h-4 w-4" />}
+   759→                    </Button>
+   760→                  </div>
+   761→                </CardContent>
+   762→              </Card>
+   763→              <div className="flex items-center justify-center gap-3 mt-2 text-[10px] text-muted-foreground/40">
+   764→                <span className="flex items-center gap-1"><Shield className="h-2.5 w-2.5" />KSP Datathon 2026</span>
+   765→                <span className="text-border">|</span>
+   766→                <span className="flex items-center gap-1"><RefreshCw className="h-2.5 w-2.5" />Self-healing SQL</span>
+   767→                <span className="text-border">|</span>
+   768→                <span>All queries logged</span>
+   769→              </div>
+   770→            </div>
+   771→          </div>
+   772→        </div>
+   773→      </div>
+   774→    </TooltipProvider>
+   775→  )
+   776→}

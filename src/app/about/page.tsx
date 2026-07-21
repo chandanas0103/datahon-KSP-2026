@@ -1,184 +1,151 @@
-import { Shield, ArrowLeft, Bot, Database, Wrench, Languages, Mic, FileText, Sparkles, ShieldCheck, Brain, Zap, Lock } from 'lucide-react'
-import Link from 'next/link'
+import { Shield, Brain, Wrench, Languages, Mic, FileText, Sparkles, ShieldCheck, Database, BarChart3, Zap, ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import { Card, CardContent } from "@/components/ui/card";
 
-const PIPELINE_STEPS = [
-  {
-    icon: Mic,
-    title: 'Voice / Text Input',
-    desc: 'Officers can type or speak queries in English, Kannada, or Hindi using the Web Speech API for voice recognition.',
-    color: 'text-violet-400',
-    bg: 'bg-violet-500/10',
-  },
-  {
-    icon: Languages,
-    title: 'Language Detection & Translation',
-    desc: 'An LLM-based translation layer detects Kannada and Hindi input and translates it to English before SQL generation.',
-    color: 'text-blue-400',
-    bg: 'bg-blue-500/10',
-  },
+const features = [
   {
     icon: Brain,
-    title: 'Text-to-SQL Generation',
-    desc: 'A fine-tuned LLM prompt converts natural language to SQLite queries using the KSP crime database schema, with few-shot examples.',
-    color: 'text-primary',
-    bg: 'bg-primary/10',
+    title: "Text-to-SQL Engine",
+    description: "Natural language queries are converted to precise SQL using a fine-tuned LLM with comprehensive KSP crime database schema awareness. Supports complex JOINs, aggregations, date filtering, and spatial queries.",
+    tech: ["z-ai-web-dev-sdk", "LLM Chat Completions", "Schema-grounded prompting"],
   },
   {
     icon: Wrench,
-    title: 'Self-Healing SQL Engine',
-    desc: 'If a generated query fails at the database level, the error is fed back to the LLM for automatic correction — up to 2 retries.',
-    color: 'text-amber-400',
-    bg: 'bg-amber-500/10',
-  },
-  {
-    icon: Database,
-    title: 'SQLite Execution via Prisma',
-    desc: 'Queries are validated (SELECT-only safety guardrail) and executed against the KSP crime database using Prisma ORM with raw SQL.',
-    color: 'text-emerald-400',
-    bg: 'bg-emerald-500/10',
+    title: "Self-Healing SQL Pipeline",
+    description: "When generated SQL fails, the system automatically feeds the error back to the LLM and retries up to 2 times with corrected queries. A visible badge shows when self-healing was triggered, building user trust.",
+    tech: ["Error-feedback loop", "Max 2 auto-retries", "Visual heal indicator"],
   },
   {
     icon: ShieldCheck,
-    title: 'Confidence Scoring',
-    desc: 'Each answer is evaluated by the LLM for confidence — High (clear match), Medium (partial/empty), or Low (mismatch/ambiguous).',
-    color: 'text-green-400',
-    bg: 'bg-green-500/10',
+    title: "Confidence Scoring",
+    description: "Every response includes a high/medium/low confidence rating determined by a parallel LLM evaluation that checks if the SQL matches the question intent and whether results are non-empty and relevant.",
+    tech: ["Parallel LLM evaluation", "Result relevance check", "Color-coded badges"],
+  },
+  {
+    icon: Languages,
+    title: "Multilingual Support (EN/KN/HI)",
+    description: "Officers can ask questions in Kannada, Hindi, or English. A translation layer automatically detects the language, translates to English for SQL generation, and shows a translation notice to the user.",
+    tech: ["Auto language detection", "Kannada default voice", "Translation notice UI"],
+  },
+  {
+    icon: Mic,
+    title: "Voice Input",
+    description: "Web Speech API enables hands-free querying with a microphone button. Supports Kannada (default), Hindi, and English with a single-click language cycler. Critical for field officers.",
+    tech: ["Web Speech API", "KN/HI/EN cycling", "Visual recording indicator"],
   },
   {
     icon: Sparkles,
-    title: 'Smart Follow-ups',
-    desc: 'The LLM generates 3 contextual follow-up questions after each answer to help officers dig deeper into the data.',
-    color: 'text-pink-400',
-    bg: 'bg-pink-500/10',
+    title: "Smart Follow-up Suggestions",
+    description: "After each answer, the LLM generates 3 contextual follow-up questions that a police officer would naturally ask next. These appear as clickable chips below the response and in a quick-access bar.",
+    tech: ["Context-aware generation", "Parallel with confidence", "One-click re-query"],
+  },
+  {
+    icon: BarChart3,
+    title: "Auto-Detect Charts",
+    description: "Query results are automatically analyzed to determine the best visualization. Categorical data (status, gender, priority) renders as donut charts; numerical comparisons render as bar charts.",
+    tech: ["Recharts library", "Smart chart type detection", "Donut & bar charts"],
   },
   {
     icon: FileText,
-    title: 'Report Export',
-    desc: 'One-click export of any query result as a formatted HTML report with tables, SQL, confidence badge, and branding.',
-    color: 'text-orange-400',
-    bg: 'bg-orange-500/10',
+    title: "Report Export",
+    description: "Any query result can be exported as a professionally formatted HTML report with KSP branding, suitable for printing or sharing. Includes query, answer, SQL, results table, and metadata.",
+    tech: ["HTML report generation", "KSP branded styling", "Print-optimized CSS"],
   },
-]
+  {
+    icon: Database,
+    title: "Query History & Logging",
+    description: "Every query is logged to the database with the original question, generated SQL, results, and answer. A collapsible sidebar shows the last 20 queries with relative timestamps for quick re-access.",
+    tech: ["QueryLog model", "Persistent storage", "Relative time display"],
+  },
+  {
+    icon: Shield,
+    title: "SQL Injection Protection",
+    description: "A multi-layer validation system ensures only SELECT queries are executed. Forbidden patterns (INSERT, UPDATE, DELETE, DROP, ALTER, etc.) are blocked before execution. Raw SQL is never trusted.",
+    tech: ["Regex-based validation", "SELECT-only enforcement", "Pre-execution safety check"],
+  },
+  {
+    icon: Zap,
+    title: "KSP Branded Dark Theme",
+    description: "A premium dark interface using oklch color space with police navy blue and gold accent colors. Animated stat counters, glassmorphism effects, and responsive design across all screen sizes.",
+    tech: ["oklch color system", "Tailwind CSS 4", "Animated counters"],
+  },
+];
 
-const FEATURES = [
-  { icon: Lock, label: 'SELECT-only guardrail', desc: 'Only read queries are allowed — no INSERT, UPDATE, DELETE, or DDL operations' },
-  { icon: Database, label: 'Full audit logging', desc: 'Every query is logged with timestamp, SQL, and results for accountability' },
-  { icon: Zap, label: 'Sub-10s responses', desc: 'Optimized pipeline with parallel confidence scoring and follow-up generation' },
-  { icon: Bot, label: 'Multi-turn conversation', desc: 'Session-based chat with context-aware follow-up suggestions' },
-]
+const architecture = [
+  { layer: "Frontend", tech: "Next.js 16, React 19, Tailwind CSS 4, shadcn/ui, Recharts" },
+  { layer: "API Layer", tech: "Next.js Route Handlers (GET /api/stats, GET /api/history, POST /api/chat, POST /api/export-pdf)" },
+  { layer: "AI Engine", tech: "z-ai-web-dev-sdk LLM — SQL generation, translation, confidence scoring, follow-up generation" },
+  { layer: "Database", tech: "SQLite via Prisma ORM — 5 models (PoliceStation, Officer, CrimeType, Case, QueryLog)" },
+  { layer: "Data", tech: "200 seeded crime cases across 10 Bangalore police stations, 20 officers, 15 crime types, 2 years" },
+];
 
 export default function AboutPage() {
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-background/95 backdrop-blur">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft className="h-4 w-4" />Back to Chat
-          </Link>
-        </div>
-      </header>
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+        <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-8">
+          <ArrowLeft className="h-4 w-4" />Back to Chat
+        </Link>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-12 space-y-16">
-        {/* Title */}
-        <div className="text-center space-y-3">
-          <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
-            <Shield className="h-7 w-7 text-primary" />
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight">Architecture & Features</h1>
-          <p className="text-muted-foreground max-w-xl mx-auto">
-            KSP Crime Intelligence uses a multi-stage AI pipeline to convert natural language questions
-            into SQL queries, execute them safely, and return actionable insights.
-          </p>
-        </div>
-
-        {/* Pipeline Diagram */}
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Zap className="h-5 w-5 text-primary" />Query Pipeline
-          </h2>
-          <div className="relative">
-            <div className="absolute left-[23px] top-8 bottom-8 w-px bg-border" />
-            <div className="space-y-0">
-              {PIPELINE_STEPS.map((step, i) => (
-                <div key={step.title} className="relative flex gap-4 pb-8 last:pb-0">
-                  <div className={`relative z-10 w-12 h-12 rounded-xl ${step.bg} flex items-center justify-center flex-shrink-0 border border-border/50`}>
-                    <step.icon className={`h-5 w-5 ${step.color}`} />
-                    <span className="absolute -top-2 -left-2 w-5 h-5 rounded-full bg-background border border-border text-[10px] font-bold flex items-center justify-center text-muted-foreground">
-                      {i + 1}
-                    </span>
-                  </div>
-                  <div className="pt-1">
-                    <h3 className="font-semibold text-sm">{step.title}</h3>
-                    <p className="text-sm text-muted-foreground mt-1 leading-relaxed max-w-lg">{step.desc}</p>
-                  </div>
-                </div>
-              ))}
+        <div className="space-y-2 mb-10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
+              <Shield className="h-5 w-5 text-primary-foreground" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">KSP Crime Intelligence</h1>
+              <p className="text-sm text-muted-foreground">Architecture & Features — KSP Datathon 2026</p>
             </div>
           </div>
-        </section>
+        </div>
 
-        {/* Tech Stack & Safety */}
-        <section className="space-y-6">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Shield className="h-5 w-5 text-primary" />Safety & Performance
+        {/* Architecture Stack */}
+        <div className="mb-10">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Database className="h-5 w-5 text-primary" />Architecture Stack
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {FEATURES.map((f) => (
-              <div key={f.label} className="rounded-xl border border-border/50 bg-card/50 p-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <f.icon className="h-4 w-4 text-primary" />
-                  </div>
-                  <h3 className="font-semibold text-sm">{f.label}</h3>
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">{f.desc}</p>
+          <div className="space-y-2">
+            {architecture.map((item) => (
+              <div key={item.layer} className="flex items-start gap-3 p-3 rounded-lg bg-card border border-border/50">
+                <span className="text-xs font-semibold text-primary min-w-[90px] pt-0.5">{item.layer}</span>
+                <span className="text-sm text-muted-foreground">{item.tech}</span>
               </div>
             ))}
           </div>
-        </section>
+        </div>
 
-        {/* Database Schema Summary */}
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Database className="h-5 w-5 text-primary" />Database Schema
+        {/* Features Grid */}
+        <div>
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Zap className="h-5 w-5 text-primary" />11 Competition Features
           </h2>
-          <div className="rounded-xl border border-border/50 bg-card/50 overflow-hidden">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-border/50">
-              {[
-                { name: 'PoliceStation', fields: '10 stations across Bangalore Urban', count: '10 records' },
-                { name: 'Officer', fields: 'Inspectors & Sub-Inspectors per station', count: '20 records' },
-                { name: 'CrimeType', fields: '15 types across 6 categories', count: '15 records' },
-                { name: 'Case', fields: 'FIR, dates, victims, suspects, status, priority, location', count: '200 records' },
-                { name: 'QueryLog', fields: 'Audit trail of all user queries', count: 'Auto-generated' },
-              ].map((t) => (
-                <div key={t.name} className="p-4">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-mono text-sm font-semibold text-primary">{t.name}</span>
-                    <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{t.count}</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {features.map((f) => (
+              <Card key={f.title} className="border-border/50 bg-card/50">
+                <CardContent className="p-5">
+                  <div className="flex items-center gap-2.5 mb-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <f.icon className="h-4 w-4 text-primary" />
+                    </div>
+                    <h3 className="text-sm font-semibold">{f.title}</h3>
                   </div>
-                  <p className="text-xs text-muted-foreground">{t.fields}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Tech Stack */}
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Tech Stack</h2>
-          <div className="flex flex-wrap gap-2">
-            {['Next.js 16', 'TypeScript', 'Tailwind CSS 4', 'shadcn/ui', 'Prisma ORM', 'SQLite', 'Recharts', 'Web Speech API', 'z-ai-web-dev-sdk'].map((t) => (
-              <span key={t} className="px-3 py-1.5 rounded-lg border border-border/50 bg-muted/30 text-xs font-medium">{t}</span>
+                  <p className="text-xs text-muted-foreground leading-relaxed mb-3">{f.description}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {f.tech.map((t) => (
+                      <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{t}</span>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
-        </section>
+        </div>
 
         {/* Footer */}
-        <div className="text-center text-xs text-muted-foreground/50 pt-8 border-t">
-          <p>KSP Datathon 2026 — Challenge 1: Conversational AI for Crime Database</p>
+        <div className="mt-12 pt-6 border-t text-center text-xs text-muted-foreground/50">
+          KSP Crime Intelligence — Built for KSP Datathon 2026 Challenge 1
         </div>
-      </main>
+      </div>
     </div>
-  )
+  );
 }
