@@ -67,14 +67,17 @@ export async function GET() {
         ORDER BY count DESC
       `),
       // Monthly trend (last 12 months)
+      // NOTE: SQLite stores DateTime as INTEGER (ms timestamp), so we must
+      // compare against a numeric epoch-millisecond value, NOT a text date string.
+      // SQLite type affinity rule: INTEGER < TEXT, so string comparisons always fail.
       db.$queryRawUnsafe(`
         SELECT
-          strftime('%Y-%m', c.filedDate) as month,
+          strftime('%Y-%m', c.filedDate / 1000, 'unixepoch', 'localtime') as month,
           COUNT(*) as count,
           SUM(CASE WHEN c.status IN ('Closed', 'Charge Sheeted') THEN 1 ELSE 0 END) as resolved
         FROM \`Case\` c
-        WHERE c.filedDate >= date('now', '-12 months')
-        GROUP BY strftime('%Y-%m', c.filedDate)
+        WHERE c.filedDate >= (strftime('%s', 'now', '-12 months') * 1000)
+        GROUP BY strftime('%Y-%m', c.filedDate / 1000, 'unixepoch', 'localtime')
         ORDER BY month ASC
       `),
       // Crime by category

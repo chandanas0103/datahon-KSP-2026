@@ -40,8 +40,8 @@ Table: Case
   - status (TEXT) - "Open", "Under Investigation", "Closed", "Charge Sheeted", "Acquitted", "Compromised"
   - priority (TEXT) - "Low", "Medium", "High", "Critical"
   - assignedToId (TEXT, FK -> Officer.id, nullable)
-  - filedDate (TEXT/DateTime) - ISO date string
-  - incidentDate (TEXT/DateTime)
+  - filedDate (INTEGER) - Unix timestamp in MILLISECONDS (not text!)
+  - incidentDate (INTEGER) - Unix timestamp in MILLISECONDS (not text!)
   - incidentTime (TEXT) - HH:MM format
   - resolvedDate (TEXT/DateTime, nullable)
   - description (TEXT)
@@ -58,27 +58,28 @@ Table: Case
 RULES:
 1. ONLY generate SELECT queries. NEVER generate INSERT, UPDATE, DELETE, DROP, ALTER, or any DML/DDL.
 2. Use JOINs to connect tables when needed. Always use the proper FK relationships.
-3. For date filtering, use SQLite date functions: date(filedDate), date(incidentDate), strftime('%Y', filedDate), etc.
-4. Use GROUP BY with COUNT, AVG, MAX, MIN for aggregate queries.
-5. Use ORDER BY for sorting results.
-6. Use LIMIT to restrict results (default 20 max).
-7. Use LIKE for partial text matching.
-8. For "last month", use date(filedDate) >= date('now', '-1 month').
-9. For "this year", use strftime('%Y', filedDate) = strftime('%Y', 'now').
-10. Return ONLY the raw SQL query. No explanation, no markdown formatting.
+3. CRITICAL: filedDate and incidentDate are stored as INTEGER (Unix milliseconds). NEVER compare them directly with text date strings. Always convert using: filedDate / 1000 to get seconds, then use 'unixepoch' modifier.
+4. For date filtering, use: filedDate >= (strftime('%s', 'now', '-N months') * 1000)
+5. For extracting year/month, use: strftime('%Y', filedDate / 1000, 'unixepoch', 'localtime') or strftime('%Y-%m', filedDate / 1000, 'unixepoch', 'localtime')
+6. For extracting readable date: date(filedDate / 1000, 'unixepoch', 'localtime')
+7. Use GROUP BY with COUNT, AVG, MAX, MIN for aggregate queries.
+8. Use ORDER BY for sorting results.
+9. Use LIMIT to restrict results (default 20 max).
+10. Use LIKE for partial text matching.
+11. Return ONLY the raw SQL query. No explanation, no markdown formatting.
 
 EXAMPLES:
 Q: "How many theft cases were filed in Whitefield last month?"
-SQL: SELECT COUNT(*) as total_cases FROM \`Case\` c JOIN PoliceStation ps ON c.stationId = ps.id JOIN CrimeType ct ON c.crimeTypeId = ct.id WHERE ps.area = 'Whitefield' AND ct.name = 'Theft' AND date(c.filedDate) >= date('now', '-1 month');
+SQL: SELECT COUNT(*) as total_cases FROM \`Case\` c JOIN PoliceStation ps ON c.stationId = ps.id JOIN CrimeType ct ON c.crimeTypeId = ct.id WHERE ps.area = 'Whitefield' AND ct.name = 'Theft' AND c.filedDate >= (strftime('%s', 'now', '-1 month') * 1000);
 
 Q: "Show open cases assigned to Officer Ravi Kumar"
-SQL: SELECT c.firNumber, c.description, c.filedDate, c.status, c.priority FROM \`Case\` c JOIN Officer o ON c.assignedToId = o.id WHERE o.name LIKE '%Ravi Kumar%' AND c.status = 'Open' ORDER BY c.filedDate DESC LIMIT 20;
+SQL: SELECT c.firNumber, c.description, date(c.filedDate / 1000, 'unixepoch', 'localtime') as filed_date, c.status, c.priority FROM \`Case\` c JOIN Officer o ON c.assignedToId = o.id WHERE o.name LIKE '%Ravi Kumar%' AND c.status = 'Open' ORDER BY c.filedDate DESC LIMIT 20;
 
 Q: "What's the most common crime type in Indiranagar this year?"
-SQL: SELECT ct.name as crime_type, COUNT(*) as case_count FROM \`Case\` c JOIN PoliceStation ps ON c.stationId = ps.id JOIN CrimeType ct ON c.crimeTypeId = ct.id WHERE ps.area = 'Indiranagar' AND strftime('%Y', c.filedDate) = strftime('%Y', 'now') GROUP BY ct.name ORDER BY case_count DESC LIMIT 10;
+SQL: SELECT ct.name as crime_type, COUNT(*) as case_count FROM \`Case\` c JOIN PoliceStation ps ON c.stationId = ps.id JOIN CrimeType ct ON c.crimeTypeId = ct.id WHERE ps.area = 'Indiranagar' AND strftime('%Y', c.filedDate / 1000, 'unixepoch', 'localtime') = strftime('%Y', 'now') GROUP BY ct.name ORDER BY case_count DESC LIMIT 10;
 
 Q: "Show all high priority cases from last 3 months"
-SQL: SELECT c.firNumber, ct.name as crime_type, ps.name as station, c.status, c.filedDate, c.priority FROM \`Case\` c JOIN CrimeType ct ON c.crimeTypeId = ct.id JOIN PoliceStation ps ON c.stationId = ps.id WHERE c.priority = 'High' AND date(c.filedDate) >= date('now', '-3 months') ORDER BY c.filedDate DESC LIMIT 20;
+SQL: SELECT c.firNumber, ct.name as crime_type, ps.name as station, c.status, date(c.filedDate / 1000, 'unixepoch', 'localtime') as filed_date, c.priority FROM \`Case\` c JOIN CrimeType ct ON c.crimeTypeId = ct.id JOIN PoliceStation ps ON c.stationId = ps.id WHERE c.priority = 'High' AND c.filedDate >= (strftime('%s', 'now', '-3 months') * 1000) ORDER BY c.filedDate DESC LIMIT 20;
 `;
 
 const TRANSLATION_PROMPT = `You are a translator for Indian police queries. Translate the following query to English if it is in Kannada, Hindi, or any other language. If it is already in English, return it exactly as-is. Return ONLY the translated text, nothing else.
