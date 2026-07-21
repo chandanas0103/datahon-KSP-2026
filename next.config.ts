@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
+  devIndicators: false,
   // Prevent redirect loops behind reverse proxies (space-z.ai / Cloudflare, etc.)
   skipTrailingSlashRedirect: true,
   // Disable asset/TS/JS redirects that proxies can echo back in loops
