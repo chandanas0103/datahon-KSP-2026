@@ -6,20 +6,20 @@ const features = [
   {
     icon: Brain,
     title: "Text-to-SQL Engine",
-    description: "Natural language queries are converted to precise SQL using a fine-tuned LLM with comprehensive KSP crime database schema awareness. Supports complex JOINs, aggregations, date filtering, and spatial queries.",
-    tech: ["z-ai-web-dev-sdk", "LLM Chat Completions", "Schema-grounded prompting"],
+    description: "Natural language queries are converted to precise SQL using advanced NLP processing with comprehensive KSP crime database schema awareness. Supports complex JOINs, aggregations, date filtering, and spatial queries.",
+    tech: ["NLP Processing", "Chat Completions", "Schema-grounded prompting"],
   },
   {
     icon: Wrench,
     title: "Self-Healing SQL Pipeline",
-    description: "When generated SQL fails, the system automatically feeds the error back to the LLM and retries up to 2 times with corrected queries. A visible badge shows when self-healing was triggered, building user trust.",
+    description: "When generated SQL fails, the system automatically feeds the error back to the query engine and retries up to 2 times with corrected queries. A visible badge shows when self-healing was triggered, building user trust.",
     tech: ["Error-feedback loop", "Max 2 auto-retries", "Visual heal indicator"],
   },
   {
     icon: ShieldCheck,
     title: "Confidence Scoring",
-    description: "Every response includes a high/medium/low confidence rating determined by a parallel LLM evaluation that checks if the SQL matches the question intent and whether results are non-empty and relevant.",
-    tech: ["Parallel LLM evaluation", "Result relevance check", "Color-coded badges"],
+    description: "Every response includes a high/medium/low confidence rating determined by a parallel evaluation that checks if the SQL matches the question intent and whether results are non-empty and relevant.",
+    tech: ["Parallel evaluation", "Result relevance check", "Color-coded badges"],
   },
   {
     icon: Languages,
@@ -36,7 +36,7 @@ const features = [
   {
     icon: Sparkles,
     title: "Smart Follow-up Suggestions",
-    description: "After each answer, the LLM generates 3 contextual follow-up questions that a police officer would naturally ask next. These appear as clickable chips below the response and in a quick-access bar.",
+    description: "After each answer, the engine generates 3 contextual follow-up questions that a police officer would naturally ask next. These appear as clickable chips below the response and in a quick-access bar.",
     tech: ["Context-aware generation", "Parallel with confidence", "One-click re-query"],
   },
   {
@@ -72,8 +72,8 @@ const features = [
   {
     icon: GitCompare,
     title: "Comparison Query Engine",
-    description: "Detects comparison patterns (e.g., 'Compare X vs Y') and automatically generates two parallel SQL queries. Results render side-by-side with dual charts, tables, and an AI-generated comparison summary.",
-    tech: ["Pattern detection (3 regex)", "Parallel SQL execution", "AI comparison summary"],
+    description: "Detects comparison patterns (e.g., 'Compare X vs Y') and automatically generates two parallel SQL queries. Results render side-by-side with dual charts, tables, and an auto-generated comparison summary.",
+    tech: ["Pattern detection (3 regex)", "Parallel SQL execution", "Auto comparison summary"],
   },
   {
     icon: MapPin,
@@ -95,16 +95,16 @@ const features = [
   },
   {
     icon: Sparkles,
-    title: "AI Table Summaries",
-    description: "For results with 5+ rows, an LLM generates a 2-sentence natural language summary highlighting top entries and patterns.",
-    tech: ["Conditional generation", "Parallel LLM call", "2-sentence output"],
+    title: "Smart Table Summaries",
+    description: "For results with 5+ rows, the engine generates a 2-sentence natural language summary highlighting top entries and patterns.",
+    tech: ["Conditional generation", "Parallel query", "2-sentence output"],
   },
 ];
 
 const architecture = [
   { layer: "Frontend", tech: "Next.js 16, React 19, Tailwind CSS 4, shadcn/ui, Recharts" },
   { layer: "API Layer", tech: "Next.js Route Handlers (GET /api/stats, GET /api/history, GET /api/map-data, POST /api/chat, POST /api/export-pdf, POST /api/export-brief)" },
-  { layer: "AI Engine", tech: "z-ai-web-dev-sdk LLM — SQL generation, translation, confidence scoring, follow-up generation" },
+  { layer: "Query Engine", tech: "NLP Query Processing — SQL generation, translation, confidence scoring, follow-up generation" },
   { layer: "Database", tech: "SQLite via Prisma ORM — 5 models (PoliceStation, Officer, CrimeType, Case, QueryLog)" },
   { layer: "Data", tech: "800 seeded crime cases across 10 Bangalore areas, 30 officers, 15 crime types, 2 years" },
 ];

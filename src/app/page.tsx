@@ -561,12 +561,12 @@ function MessageBubble({ message, userQuestion, onFollowup, onExport, onToggleEx
           </div>
         )}
         {!isUser && message.sql && !message.streamedContent && <SqlBlock sql={message.sql} explanation={message.sqlExplanation} timing={message.timing} showExplanation={message.showExplanation} onToggleExplanation={() => onToggleExplanation(message.id)} onRerunSql={(newSql) => onRerunSql(message.id, newSql)} />}
-        {/* AI Insight Card */}
+        {/* Insight Card */}
         {!isUser && message.insight && !message.streamedContent && (
           <div className="mt-2.5 rounded-xl border border-primary/15 bg-gradient-to-r from-primary/5 via-primary/[0.03] to-transparent px-3.5 py-2.5">
             <div className="flex items-center gap-1.5 mb-1">
               <Sparkles className="h-3.5 w-3.5 text-primary" />
-              <span className="text-[11px] font-semibold text-primary">AI Insight</span>
+              <span className="text-[11px] font-semibold text-primary">Insight</span>
             </div>
             <p className="text-xs text-foreground/85 leading-relaxed">{message.insight}</p>
           </div>
@@ -800,7 +800,7 @@ function DemoBanner({ onPlay, onDismiss }: { onPlay: () => void; onDismiss: () =
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground/90">New here? Watch a quick demo</p>
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">See the AI analyze: &ldquo;{DEMO_QUERY}&rdquo;</p>
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">See the system analyze: &ldquo;{DEMO_QUERY}&rdquo;</p>
           </div>
           <Button size="sm" onClick={onPlay} className="flex-shrink-0 rounded-xl gap-1.5 text-xs">
             <Zap className="h-3 w-3" />Try Demo
@@ -1099,7 +1099,7 @@ export default function Home() {
                 </div>
                 <div>
                   <h1 className="text-sm font-semibold leading-tight">KSP Crime Intelligence</h1>
-                  <p className="text-[10px] text-muted-foreground">Conversational AI for Crime Database</p>
+                  <p className="text-[10px] text-muted-foreground">Crime Database Query System</p>
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
