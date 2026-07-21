@@ -91,6 +91,10 @@ User question: `;
 const ERROR_FIX_PROMPT = `The following SQL query failed with a database error. Fix the SQL and return ONLY the corrected SQL query, no explanation.
 
 Original question: `;
+const EXPLAIN_SQL_PROMPT = `You are a SQL teacher for police officers. Explain the following SQL query in simple, plain English (2-3 sentences). Mention which tables are being joined, what filters are applied, and what the result represents. Be concise and clear.
+
+SQL: `;
+
 const CONFIDENCE_PROMPT = `You are evaluating the confidence of a Text-to-SQL answer. Given the original question, the generated SQL, and the query result, rate confidence as "high", "medium", or "low".
 
 Rules:
@@ -224,6 +228,17 @@ async function getConfidence(question: string, sql: string, results: Record<stri
   }
 }
 
+async function explainSQL(sql: string): Promise<string> {
+  try {
+    return await callLLM(
+      [{ role: "assistant", content: EXPLAIN_SQL_PROMPT }, { role: "user", content: sql }],
+      0.3
+    );
+  } catch {
+    return "";
+  }
+}
+
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
   try {
@@ -235,6 +250,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 1: Translate if needed (Kannada/Hindi → English)
+    const t0 = Date.now();
     let translatedQuestion = question;
     try {
       const translated = await callLLM(
@@ -247,8 +263,10 @@ export async function POST(request: NextRequest) {
     } catch {
       // Translation failed — proceed with original question
     }
+    const translationTime = Date.now() - t0;
 
     // Step 2: Generate SQL with self-healing retry
+    const t1 = Date.now();
     let sql = "";
     let results: Record<string, unknown>[] = [];
     let dbError: string | null = null;
@@ -284,10 +302,12 @@ export async function POST(request: NextRequest) {
       }
 
       // Execute
+      const t2 = Date.now();
       try {
         const rawResults = await db.$queryRawUnsafe(sql);
         results = serializeResults(rawResults as Record<string, unknown>[]);
         dbError = null;
+        // execution succeeded
         break;
       } catch (err: unknown) {
         lastError = err instanceof Error ? err.message : String(err);
@@ -311,14 +331,21 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Step 3: Generate natural answer
-    const answer = generateNaturalAnswer(translatedQuestion, sql, results);
+    // Step 3: Generate natural answer + SQL explanation (parallel)
+    const t3 = Date.now();
+    const [answer, sqlExplanation] = await Promise.all([
+      Promise.resolve(generateNaturalAnswer(translatedQuestion, sql, results)),
+      explainSQL(sql),
+    ]);
 
-    // Step 4: Confidence scoring (parallel with followups)
+    // Step 4: Confidence scoring + followups (parallel)
+    const t4 = Date.now();
     const [confidence, followups] = await Promise.all([
       getConfidence(translatedQuestion, sql, results),
       generateFollowups(translatedQuestion, results),
     ]);
+    const confidenceTime = Date.now() - t4;
+    const sqlGenTimeFinal = t3 - t1; // total SQL gen time (including retries)
 
     // Step 5: Log the query
     await db.queryLog.create({
@@ -331,6 +358,8 @@ export async function POST(request: NextRequest) {
       answer, sql, results, confidence,
       translatedQuestion: translatedQuestion !== question ? translatedQuestion : null,
       responseTime, followups,
+      sqlExplanation: sqlExplanation || null,
+      timing: { translation: translationTime, sqlGeneration: sqlGenTimeFinal, confidence: confidenceTime },
       ...(retryCount > 0 ? { selfHealed: true, retryCount } : {}),
     });
   } catch (error: unknown) {

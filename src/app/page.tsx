@@ -16,6 +16,7 @@ import {
   Mic, MicOff, FileText, Clock, History, ArrowRight, Languages,
   ShieldCheck, ShieldAlert, ShieldQuestion, X, Download, PanelLeftClose, PanelLeft,
   TrendingUp, FolderOpen, MapPin, Activity, RefreshCw, Wrench, Zap, Play,
+  BarChart3 as BarChartIcon, Keyboard, Timer, Lightbulb,
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -24,6 +25,12 @@ import {
 } from 'recharts'
 
 // ─── Types ─────────────────────────────────────────────────
+
+interface TimingBreakdown {
+  translation?: number
+  sqlGeneration?: number
+  confidence?: number
+}
 
 interface Message {
   id: string
@@ -40,6 +47,9 @@ interface Message {
   selfHealed?: boolean
   retryCount?: number
   streamedContent?: string
+  sqlExplanation?: string | null
+  timing?: TimingBreakdown | null
+  showExplanation?: boolean
 }
 
 interface HistoryItem {
@@ -212,7 +222,13 @@ function ChartPanel({ results }: { results: Record<string, unknown>[] }) {
   )
 }
 
-function SqlBlock({ sql }: { sql: string }) {
+function SqlBlock({ sql, explanation, timing, onToggleExplanation, showExplanation }: {
+  sql: string
+  explanation?: string | null
+  timing?: { translation?: number; sqlGeneration?: number; confidence?: number } | null
+  onToggleExplanation?: () => void
+  showExplanation?: boolean
+}) {
   const [copied, setCopied] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const handleCopy = useCallback(() => { navigator.clipboard.writeText(sql); setCopied(true); setTimeout(() => setCopied(false), 2000) }, [sql])
@@ -225,16 +241,47 @@ function SqlBlock({ sql }: { sql: string }) {
       {expanded && (
         <div className="relative">
           <pre className="px-3 py-2 text-xs font-mono overflow-x-auto text-foreground/80 leading-relaxed">{sql}</pre>
-          <Button variant="ghost" size="sm" className="absolute top-1 right-1 h-7 w-7 p-0" onClick={handleCopy}>
-            {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
-          </Button>
+          <div className="flex items-center gap-1 px-3 pb-2">
+            <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] gap-1" onClick={handleCopy}>
+              {copied ? <Check className="h-3 w-3 text-green-500" /> : <><Copy className="h-3 w-3" />Copy</>}
+            </Button>
+            {explanation && onToggleExplanation && (
+              <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px] gap-1 text-primary hover:text-primary" onClick={onToggleExplanation}>
+                <Lightbulb className="h-3 w-3" />{showExplanation ? 'Hide' : 'Explain SQL'}
+              </Button>
+            )}
+          </div>
+          {/* SQL Explanation */}
+          {showExplanation && explanation && (
+            <div className="mx-3 mb-2 px-3 py-2.5 rounded-lg bg-primary/5 border border-primary/10">
+              <p className="text-[11px] font-medium text-primary mb-1 flex items-center gap-1"><Lightbulb className="h-3 w-3" />SQL Explanation</p>
+              <p className="text-xs text-foreground/80 leading-relaxed">{explanation}</p>
+            </div>
+          )}
+          {/* Timing Breakdown */}
+          {timing && (timing.translation || timing.sqlGeneration || timing.confidence) && (
+            <div className="mx-3 mb-3 px-3 py-2 rounded-lg bg-muted/50 border border-border/30">
+              <p className="text-[10px] font-medium text-muted-foreground mb-1.5 flex items-center gap-1"><Timer className="h-2.5 w-2.5" />Response Timing Breakdown</p>
+              <div className="flex flex-wrap gap-3">
+                {timing.translation != null && (
+                  <span className="text-[10px] text-muted-foreground">Translation: <span className="text-foreground/70 font-mono">{(timing.translation / 1000).toFixed(1)}s</span></span>
+                )}
+                {timing.sqlGeneration != null && (
+                  <span className="text-[10px] text-muted-foreground">SQL Gen: <span className="text-foreground/70 font-mono">{(timing.sqlGeneration / 1000).toFixed(1)}s</span></span>
+                )}
+                {timing.confidence != null && (
+                  <span className="text-[10px] text-muted-foreground">Confidence: <span className="text-foreground/70 font-mono">{(timing.confidence / 1000).toFixed(1)}s</span></span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
   )
 }
 
-function MessageBubble({ message, userQuestion, onFollowup, onExport }: { message: Message; userQuestion: string; onFollowup: (q: string) => void; onExport: () => void }) {
+function MessageBubble({ message, userQuestion, onFollowup, onExport, onToggleExplanation }: { message: Message; userQuestion: string; onFollowup: (q: string) => void; onExport: () => void; onToggleExplanation: (id: string) => void }) {
   const isUser = message.role === 'user'
   const displayContent = message.streamedContent ?? message.content
 
@@ -291,7 +338,7 @@ function MessageBubble({ message, userQuestion, onFollowup, onExport }: { messag
             )}
           </div>
         )}
-        {!isUser && message.sql && !message.streamedContent && <SqlBlock sql={message.sql} />}
+        {!isUser && message.sql && !message.streamedContent && <SqlBlock sql={message.sql} explanation={message.sqlExplanation} timing={message.timing} showExplanation={message.showExplanation} onToggleExplanation={() => onToggleExplanation(message.id)} />}
         {!isUser && message.results && message.results.length > 0 && !message.streamedContent && (
           <>
             <ChartPanel results={message.results} />
@@ -505,9 +552,9 @@ export default function Home() {
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showDemo, setShowDemo] = useState(false)
+  const [showShortcuts, setShowShortcuts] = useState(false)
   useEffect(() => {
     if (window.innerWidth < 1024) setSidebarOpen(false)
-    // Show demo banner only for first-time visitors
     const hasVisited = localStorage.getItem('ksp-visited')
     if (!hasVisited) setShowDemo(true)
   }, [])
@@ -572,6 +619,8 @@ export default function Home() {
         translatedQuestion: data.translatedQuestion || null,
         responseTime: data.responseTime || 0,
         followups: data.followups || [],
+        sqlExplanation: data.sqlExplanation || null,
+        timing: data.timing || null,
         selfHealed: data.selfHealed || false,
         retryCount: data.retryCount || 0,
       }
@@ -655,6 +704,35 @@ export default function Home() {
   const clearChat = useCallback(() => { setMessages([]) }, [])
   const handleDemo = useCallback(() => { sendMessage(DEMO_QUERY) }, [sendMessage])
 
+  // Toggle SQL explanation for a message
+  const toggleExplanation = useCallback((msgId: string) => {
+    setMessages((prev) => prev.map(m => m.id === msgId ? { ...m, showExplanation: !m.showExplanation } : m))
+  }, [])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Ignore if typing in textarea
+      if ((e.target as HTMLElement)?.tagName === 'TEXTAREA' || (e.target as HTMLElement)?.tagName === 'INPUT') {
+        if (e.key === 'Escape') { textareaRef.current?.blur(); return }
+        return
+      }
+      if (e.key === '/' || (e.ctrlKey && e.key === 'k')) {
+        e.preventDefault()
+        textareaRef.current?.focus()
+      }
+      if (e.key === 'Escape' && showShortcuts) {
+        setShowShortcuts(false)
+      }
+      if (e.key === '?' && !e.ctrlKey) {
+        e.preventDefault()
+        setShowShortcuts(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [showShortcuts])
+
   const voiceLangLabel = { 'kn-IN': 'KN', 'hi-IN': 'HI', 'en-IN': 'EN' }[voiceLang]
 
   return (
@@ -693,6 +771,22 @@ export default function Home() {
                     </a>
                   </TooltipTrigger>
                   <TooltipContent>Architecture & features</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <a href="/dashboard" className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 px-2 py-1 rounded-md hover:bg-muted/50">
+                      <BarChartIcon className="h-3 w-3" />Dashboard
+                    </a>
+                  </TooltipTrigger>
+                  <TooltipContent>Analytics dashboard</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button onClick={() => setShowShortcuts(true)} className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 px-2 py-1 rounded-md hover:bg-muted/50">
+                      <Keyboard className="h-3 w-3" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Keyboard shortcuts</TooltipContent>
                 </Tooltip>
                 {messages.length > 0 && (
                   <Tooltip>
@@ -767,6 +861,7 @@ export default function Home() {
                       userQuestion={userQ}
                       onFollowup={sendMessage}
                       onExport={() => handleExport(msg, userQ)}
+                      onToggleExplanation={toggleExplanation}
                     />
                     )
                   })}
@@ -871,16 +966,49 @@ export default function Home() {
                 </CardContent>
               </Card>
               <div className="flex items-center justify-center gap-3 mt-2 text-[10px] text-muted-foreground/40">
+                <a href="/dashboard" className="flex items-center gap-1 hover:text-muted-foreground/70 transition-colors"><BarChartIcon className="h-2.5 w-2.5" />Analytics</a>
+                <span className="text-border">|</span>
                 <span className="flex items-center gap-1"><Shield className="h-2.5 w-2.5" />KSP Datathon 2026</span>
                 <span className="text-border">|</span>
                 <span className="flex items-center gap-1"><RefreshCw className="h-2.5 w-2.5" />Self-healing SQL</span>
                 <span className="text-border">|</span>
-                <span>All queries logged</span>
+                <button onClick={() => setShowShortcuts(true)} className="flex items-center gap-1 hover:text-muted-foreground/70 transition-colors"><Keyboard className="h-2.5 w-2.5" />? for shortcuts</button>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Keyboard Shortcuts Overlay */}
+      {showShortcuts && (
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4" onClick={() => setShowShortcuts(false)}>
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-sm font-semibold flex items-center gap-2"><Keyboard className="h-4 w-4 text-primary" />Keyboard Shortcuts</h3>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowShortcuts(false)}><X className="h-4 w-4" /></Button>
+            </div>
+            <div className="space-y-3">
+              {[
+                { keys: ['/'], desc: 'Focus search input' },
+                { keys: ['Ctrl', 'K'], desc: 'Focus search input' },
+                { keys: ['Enter'], desc: 'Send message' },
+                { keys: ['Shift', 'Enter'], desc: 'New line in input' },
+                { keys: ['Escape'], desc: 'Close overlay / unfocus' },
+                { keys: ['?'], desc: 'Show this shortcuts panel' },
+              ].map(s => (
+                <div key={s.desc} className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">{s.desc}</span>
+                  <div className="flex items-center gap-1">
+                    {s.keys.map(k => (
+                      <kbd key={k} className="px-1.5 py-0.5 text-[10px] font-mono bg-muted rounded border border-border text-foreground/70">{k}</kbd>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </TooltipProvider>
   )
 }
