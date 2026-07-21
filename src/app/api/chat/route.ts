@@ -117,6 +117,24 @@ Be specific with numbers. Use professional but accessible language. Do NOT just 
 
 Query: `;
 
+const TABLE_SUMMARY_PROMPT = `You are a crime data analyst. Summarize these query results in 2 concise sentences. Mention the total count, the top entries with numbers, and any notable patterns. Be specific with numbers, not vague.
+
+Results: `;
+
+const COMPARISON_SQL_PROMPT = `You are a SQL expert for Karnataka State Police crime database.
+
+${SCHEMA_CONTEXT}
+
+The user wants to compare two entities. Generate TWO separate but structurally identical SQL queries — one for each entity — so the results can be compared side by side. The columns returned must be the same for both queries.
+
+Return ONLY a JSON array of exactly 2 SQL strings. No explanation, no markdown. Example: ["SELECT ...", "SELECT ..."]
+
+Question: `;
+
+const COMPARISON_SUMMARY_PROMPT = `You are a senior crime analyst for Karnataka State Police. Compare these two query result sets and provide a 2-3 sentence comparison summary. Highlight key differences, mention specific numbers and percentages, and suggest actionable insights. Be precise.
+
+`;
+
 function serializeResults(
   results: Record<string, unknown>[]
 ): Record<string, unknown>[] {
@@ -197,6 +215,55 @@ function cleanSQL(sql: string): string {
   return sql.replace(/^```(?:sql)?\s*/i, "").replace(/\s*```$/i, "").trim();
 }
 
+
+
+// ── Query Cache (in-memory LRU) ──
+class QueryCache {
+  private cache = new Map<string, { data: Record<string, unknown>; ts: number }>();
+  private maxSize = 100;
+  private ttl = 5 * 60 * 1000;
+
+  private key(q: string): string {
+    let h = 0;
+    const s = q.toLowerCase().trim();
+    for (let i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h = h & h; }
+    return String(h);
+  }
+
+  get(q: string): Record<string, unknown> | null {
+    const entry = this.cache.get(this.key(q));
+    if (!entry) return null;
+    if (Date.now() - entry.ts > this.ttl) { this.cache.delete(this.key(q)); return null; }
+    return entry.data;
+  }
+
+  set(q: string, data: Record<string, unknown>): void {
+    const k = this.key(q);
+    if (this.cache.size >= this.maxSize) { const first = this.cache.keys().next().value; if (first) this.cache.delete(first as string); }
+    this.cache.set(k, { data, ts: Date.now() });
+  }
+}
+
+const queryCache = new QueryCache();
+
+// ── Comparison Detection ──
+function detectComparison(question: string): { isComparison: boolean; entityA?: string; entityB?: string } {
+  const patterns = [
+    /compare\s+(.+?)\s+(?:vs|versus)\.?\s+(.+)/i,
+    /difference\s+between\s+(.+?)\s+and\s+(.+)/i,
+    /(.+?)\s+(?:vs|versus)\.?\s+(.+)/i,
+  ];
+  for (const p of patterns) {
+    const m = question.match(p);
+    if (m) {
+      const a = m[1].trim().replace(/^(show me|what is|how many|list|get|find)\s*/i, '');
+      const b = m[2].trim().replace(/[?!.]+$/, '');
+      if (a.length > 1 && b.length > 1) return { isComparison: true, entityA: a, entityB: b };
+    }
+  }
+  return { isComparison: false };
+}
+
 async function generateFollowups(question: string, results: Record<string, unknown>[]): Promise<string[]> {
   try {
     const resultSummary = results.length > 0
@@ -268,6 +335,58 @@ async function explainSQL(sql: string): Promise<string> {
   }
 }
 
+
+async function generateComparisonSQL(question: string, entityA: string, entityB: string): Promise<string[]> {
+  try {
+    const response = await callLLM(
+      [
+        { role: "assistant", content: COMPARISON_SQL_PROMPT + question + `
+Entity A: ${entityA}
+Entity B: ${entityB}` },
+        { role: "user", content: "Generate the two SQL queries as a JSON array." },
+      ],
+      0.1
+    );
+    const cleaned = response.replace(/```json?/gi, "").replace(/```/g, "").trim();
+    const queries = JSON.parse(cleaned);
+    if (Array.isArray(queries) && queries.length === 2 && typeof queries[0] === "string" && typeof queries[1] === "string") {
+      return queries.map(cleanSQL);
+    }
+    return [];
+  } catch { return []; }
+}
+
+async function generateComparisonSummary(question: string, entityA: string, entityB: string, resultsA: Record<string, unknown>[], resultsB: Record<string, unknown>[]): Promise<string> {
+  try {
+    return await callLLM(
+      [
+        { role: "assistant", content: COMPARISON_SUMMARY_PROMPT },
+        { role: "user", content: `Question: ${question}
+
+${entityA} results (${resultsA.length} rows): ${JSON.stringify(resultsA.slice(0, 10))}
+
+${entityB} results (${resultsB.length} rows): ${JSON.stringify(resultsB.slice(0, 10))}` },
+      ],
+      0.4
+    );
+  } catch { return ""; }
+}
+
+async function generateTableSummary(question: string, results: Record<string, unknown>[]): Promise<string> {
+  if (results.length <= 5) return "";
+  try {
+    return await callLLM(
+      [
+        { role: "assistant", content: TABLE_SUMMARY_PROMPT },
+        { role: "user", content: `Question: ${question}
+
+Results (${results.length} rows): ${JSON.stringify(results.slice(0, 10))}` },
+      ],
+      0.3
+    );
+  } catch { return ""; }
+}
+
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
   try {
@@ -280,6 +399,12 @@ export async function POST(request: NextRequest) {
 
     if (!question || typeof question !== "string") {
       return NextResponse.json({ error: "A question is required." }, { status: 400 });
+    }
+
+    // ── Query Cache Check ──
+    const cachedResult = queryCache.get(question);
+    if (cachedResult) {
+      return NextResponse.json({ ...cachedResult, cached: true, responseTime: Date.now() - startTime });
     }
 
     // ── SQL Playground mode: skip LLM, run SQL directly ──
@@ -313,6 +438,54 @@ export async function POST(request: NextRequest) {
       // Translation failed — proceed with original question
     }
     const translationTime = Date.now() - t0;
+
+    // ── Comparison Query Detection ──
+    const comp = detectComparison(translatedQuestion);
+    if (comp.isComparison && comp.entityA && comp.entityB) {
+      const comparisonSqls = await generateComparisonSQL(translatedQuestion, comp.entityA, comp.entityB);
+      if (comparisonSqls.length === 2) {
+        const vA = validateSQL(comparisonSqls[0]);
+        const vB = validateSQL(comparisonSqls[1]);
+        if (vA.valid && vB.valid) {
+          try {
+            const [rawA, rawB] = await Promise.all([
+              db.$queryRawUnsafe(comparisonSqls[0]),
+              db.$queryRawUnsafe(comparisonSqls[1]),
+            ]);
+            const resultsA = serializeResults(rawA as Record<string, unknown>[]);
+            const resultsB = serializeResults(rawB as Record<string, unknown>[]);
+            const compSummary = await generateComparisonSummary(translatedQuestion, comp.entityA!, comp.entityB!, resultsA, resultsB);
+            const compData = {
+              entityA: comp.entityA,
+              entityB: comp.entityB,
+              resultsA,
+              resultsB,
+              sqlA: comparisonSqls[0],
+              sqlB: comparisonSqls[1],
+              summary: compSummary,
+            };
+            const compAnswer = `Here’s a comparison between **${comp.entityA}** and **${comp.entityB}**.`;
+            const compResponseData = {
+              answer: compAnswer, sql: `${comparisonSqls[0]}
+--- vs ---
+${comparisonSqls[1]}`,
+              results: resultsA, confidence: "high",
+              translatedQuestion: translatedQuestion !== question ? translatedQuestion : null,
+              responseTime: Date.now() - startTime, followups: [],
+              sqlExplanation: null, insight: compSummary,
+              tableSummary: null, comparison: compData, cached: false,
+              timing: { translation: translationTime },
+            };
+            queryCache.set(question, compResponseData);
+            await db.queryLog.create({ data: { question, sqlQuery: compResponseData.sql as string, sqlResult: JSON.stringify(resultsA), answer: compAnswer } });
+            return NextResponse.json(compResponseData);
+          } catch (err: unknown) {
+            // Fall through to normal flow if comparison fails
+            console.error("Comparison query failed, falling back to normal flow:", err);
+          }
+        }
+      }
+    }
 
     // Step 2: Generate SQL with self-healing retry
     const t1 = Date.now();
@@ -377,6 +550,7 @@ export async function POST(request: NextRequest) {
         answer: "I couldn't generate a query for that question. Please try rephrasing it.",
         sql: null, results: [], confidence: "low", translatedQuestion,
         responseTime: Date.now() - startTime, followups: [],
+        tableSummary: null, comparison: null, cached: false,
       });
     }
 
@@ -385,15 +559,17 @@ export async function POST(request: NextRequest) {
         answer: `The generated query encountered an error: ${dbError}. Please try rephrasing your question.`,
         sql, results: [], confidence: "low", error: dbError,
         translatedQuestion, responseTime: Date.now() - startTime, followups: [],
+        tableSummary: null, comparison: null, cached: false,
       });
     }
 
     // Step 3: Generate natural answer + SQL explanation + AI insight (parallel)
     const t3 = Date.now();
-    const [answer, sqlExplanation, insight] = await Promise.all([
+    const [answer, sqlExplanation, insight, tableSummary] = await Promise.all([
       Promise.resolve(generateNaturalAnswer(translatedQuestion, sql, results)),
       explainSQL(sql),
       generateInsight(translatedQuestion, sql, results),
+      generateTableSummary(translatedQuestion, results),
     ]);
 
     // Step 4: Confidence scoring + followups (parallel)
@@ -412,20 +588,24 @@ export async function POST(request: NextRequest) {
 
     const responseTime = Date.now() - startTime;
 
-    return NextResponse.json({
+    const responseData = {
       answer, sql, results, confidence,
       translatedQuestion: translatedQuestion !== question ? translatedQuestion : null,
       responseTime, followups,
       sqlExplanation: sqlExplanation || null,
       insight: insight || null,
+      tableSummary: tableSummary || null,
+      comparison: null, cached: false,
       timing: { translation: translationTime, sqlGeneration: sqlGenTimeFinal, confidence: confidenceTime },
       ...(retryCount > 0 ? { selfHealed: true, retryCount } : {}),
-    });
+    };
+    queryCache.set(question, responseData);
+    return NextResponse.json(responseData);
   } catch (error: unknown) {
     const errMsg = error instanceof Error ? error.message : String(error);
     console.error("Chat API error:", errMsg);
     return NextResponse.json(
-      { answer: `An internal error occurred. Please try again.`, sql: null, results: [], error: "Internal server error", confidence: "low", responseTime: Date.now() - startTime, followups: [] },
+      { answer: `An internal error occurred. Please try again.`, sql: null, results: [], error: "Internal server error", confidence: "low", responseTime: Date.now() - startTime, followups: [], tableSummary: null, comparison: null, cached: false },
       { status: 500 }
     );
   }

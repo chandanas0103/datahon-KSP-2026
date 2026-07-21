@@ -1,4 +1,4 @@
-import { Shield, Brain, Wrench, Languages, Mic, FileText, Sparkles, ShieldCheck, Database, BarChart3, Zap, ArrowLeft } from "lucide-react";
+import { Shield, Brain, Wrench, Languages, Mic, FileText, Sparkles, ShieldCheck, Database, BarChart3, Zap, ArrowLeft, GitCompare, MapPin, FileOutput, Bolt } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -69,14 +69,44 @@ const features = [
     description: "A premium dark interface using oklch color space with police navy blue and gold accent colors. Animated stat counters, glassmorphism effects, and responsive design across all screen sizes.",
     tech: ["oklch color system", "Tailwind CSS 4", "Animated counters"],
   },
+  {
+    icon: GitCompare,
+    title: "Comparison Query Engine",
+    description: "Detects comparison patterns (e.g., 'Compare X vs Y') and automatically generates two parallel SQL queries. Results render side-by-side with dual charts, tables, and an AI-generated comparison summary.",
+    tech: ["Pattern detection (3 regex)", "Parallel SQL execution", "AI comparison summary"],
+  },
+  {
+    icon: MapPin,
+    title: "Crime Location Heatmap",
+    description: "An interactive Leaflet map visualizes crime data across 10 Bangalore areas. Circle markers are sized by case count and color-coded by primary crime type with click-through breakdowns.",
+    tech: ["Leaflet + OpenStreetMap", "Dark CartoDB tiles", "Dynamic import (SSR-safe)"],
+  },
+  {
+    icon: FileOutput,
+    title: "Session Intelligence Briefing",
+    description: "Export the entire conversation as a multi-page PDF with KSP-branded cover, table of contents, executive summary of all insights, and per-query sections with results.",
+    tech: ["PDFKit", "Multi-page generation", "Cover + TOC + summary"],
+  },
+  {
+    icon: Bolt,
+    title: "Query Cache & Performance",
+    description: "In-memory LRU cache (100 entries, 5-min TTL) returns identical re-queries in 0ms with a visible Cached badge.",
+    tech: ["In-memory LRU Map", "5-minute TTL", "0ms cache-hit"],
+  },
+  {
+    icon: Sparkles,
+    title: "AI Table Summaries",
+    description: "For results with 5+ rows, an LLM generates a 2-sentence natural language summary highlighting top entries and patterns.",
+    tech: ["Conditional generation", "Parallel LLM call", "2-sentence output"],
+  },
 ];
 
 const architecture = [
   { layer: "Frontend", tech: "Next.js 16, React 19, Tailwind CSS 4, shadcn/ui, Recharts" },
-  { layer: "API Layer", tech: "Next.js Route Handlers (GET /api/stats, GET /api/history, POST /api/chat, POST /api/export-pdf)" },
+  { layer: "API Layer", tech: "Next.js Route Handlers (GET /api/stats, GET /api/history, GET /api/map-data, POST /api/chat, POST /api/export-pdf, POST /api/export-brief)" },
   { layer: "AI Engine", tech: "z-ai-web-dev-sdk LLM — SQL generation, translation, confidence scoring, follow-up generation" },
   { layer: "Database", tech: "SQLite via Prisma ORM — 5 models (PoliceStation, Officer, CrimeType, Case, QueryLog)" },
-  { layer: "Data", tech: "200 seeded crime cases across 10 Bangalore police stations, 20 officers, 15 crime types, 2 years" },
+  { layer: "Data", tech: "800 seeded crime cases across 10 Bangalore areas, 30 officers, 15 crime types, 2 years" },
 ];
 
 export default function AboutPage() {
@@ -117,7 +147,7 @@ export default function AboutPage() {
         {/* Features Grid */}
         <div>
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Zap className="h-5 w-5 text-primary" />11 Competition Features
+            <Zap className="h-5 w-5 text-primary" />16 Competition Features
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {features.map((f) => (

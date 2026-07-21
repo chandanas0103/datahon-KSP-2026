@@ -17,7 +17,7 @@ import {
   ShieldCheck, ShieldAlert, ShieldQuestion, X, Download, PanelLeftClose, PanelLeft,
   TrendingUp, FolderOpen, MapPin, Activity, RefreshCw, Wrench, Zap, Play,
   BarChart3 as BarChartIcon, Keyboard, Timer, Lightbulb, Search, Table2, Terminal,
-  FileSpreadsheet, RotateCcw,
+  FileSpreadsheet, RotateCcw, GitCompare, FileOutput,
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -25,6 +25,9 @@ import {
   PieChart, Pie, Cell, Legend,
   LineChart, Line, AreaChart, Area,
 } from 'recharts'
+import dynamic from 'next/dynamic'
+const ComparisonPanel = dynamic(() => import('@/components/ComparisonPanel'), { ssr: false })
+const CrimeMapView = dynamic(() => import('@/components/CrimeMapView'), { ssr: false })
 
 // ─── Types ─────────────────────────────────────────────────
 
@@ -56,6 +59,17 @@ interface Message {
   playgroundError?: string | null
   playgroundLoading?: boolean
   insight?: string | null
+  comparison?: {
+    entityA: string
+    entityB: string
+    resultsA: Record<string, unknown>[]
+    resultsB: Record<string, unknown>[]
+    sqlA: string
+    sqlB: string
+    summary: string
+  } | null
+  tableSummary?: string | null
+  cached?: boolean
 }
 
 interface HistoryItem {
@@ -85,6 +99,7 @@ const SAMPLE_QUESTIONS = [
   'How many cases were filed last month?',
   'What is the gender distribution of victims?',
   'Show resolved cases from Koramangala',
+  'Compare Whitefield vs Koramangala crime rates',
   'Which station has the highest resolution rate?',
   'Show a breakdown of cases by priority',
 ]
@@ -136,6 +151,15 @@ function SelfHealBadge({ count }: { count: number }) {
   return (
     <Badge className="gap-1 bg-blue-500/15 text-blue-400 border-blue-500/20 hover:bg-blue-500/25 font-normal">
       <Wrench className="h-3 w-3" /> Self-healed ({count}x)
+    </Badge>
+  )
+}
+
+
+function CacheHitBadge() {
+  return (
+    <Badge className="gap-1 bg-cyan-500/15 text-cyan-400 border-cyan-500/20 hover:bg-cyan-500/25 font-normal">
+      <Zap className="h-3 w-3" /> Cached
     </Badge>
   )
 }
@@ -521,7 +545,7 @@ function MessageBubble({ message, userQuestion, onFollowup, onExport, onToggleEx
         )}
         {!isUser && !message.streamedContent && (
           <div className="flex flex-wrap items-center gap-2 mt-1">
-            {message.confidence && <ConfidenceBadge level={message.confidence} />}
+            {message.cached ? <CacheHitBadge /> : message.confidence && <ConfidenceBadge level={message.confidence} />}
             {message.selfHealed && message.retryCount && <SelfHealBadge count={message.retryCount} />}
             {message.responseTime != null && message.responseTime > 0 && <ResponseTimeBadge ms={message.responseTime} />}
             {message.results && message.results.length > 0 && (
@@ -547,6 +571,20 @@ function MessageBubble({ message, userQuestion, onFollowup, onExport, onToggleEx
             <p className="text-xs text-foreground/85 leading-relaxed">{message.insight}</p>
           </div>
         )}
+        {/* Table Summary */}
+        {!isUser && message.tableSummary && !message.streamedContent && message.results && message.results.length > 5 && (
+          <div className="mt-2 rounded-lg border border-blue-500/15 bg-blue-500/5 px-3.5 py-2">
+            <div className="flex items-center gap-1.5 mb-1">
+              <BarChart3 className="h-3 w-3 text-blue-400" />
+              <span className="text-[11px] font-medium text-blue-400">Data Summary</span>
+            </div>
+            <p className="text-[11px] text-foreground/75 leading-relaxed">{message.tableSummary}</p>
+          </div>
+        )}
+        {/* Comparison Panel */}
+        {!isUser && message.comparison && !message.streamedContent && (
+          <ComparisonPanel comparison={message.comparison} />
+        )}
         {!isUser && message.playgroundResult !== undefined && !message.streamedContent && (
           <div className="mt-2">
             <div className="flex items-center gap-1.5 mb-1.5">
@@ -571,7 +609,7 @@ function MessageBubble({ message, userQuestion, onFollowup, onExport, onToggleEx
             )}
           </div>
         )}
-        {!isUser && message.results && message.results.length > 0 && !message.streamedContent && message.playgroundResult === undefined && (
+        {!isUser && message.results && message.results.length > 0 && !message.streamedContent && message.playgroundResult === undefined && !message.comparison && (
           <>
             <ChartPanel results={message.results} />
             <ResultsTable results={message.results} onExportCsv={() => { if (message.results) exportCsv(message.results) }} />
@@ -785,6 +823,9 @@ export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showDemo, setShowDemo] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
+  const [showMap, setShowMap] = useState(false)
+  const [mapData, setMapData] = useState<Array<{area: string; lat: number; lng: number; total: number; breakdown: Record<string, number>}>>([])
+  const [isExportingBrief, setIsExportingBrief] = useState(false)
   useEffect(() => {
     if (window.innerWidth < 1024) setSidebarOpen(false)
     const hasVisited = localStorage.getItem('ksp-visited')
@@ -857,6 +898,9 @@ export default function Home() {
         timing: data.timing || null,
         selfHealed: data.selfHealed || false,
         retryCount: data.retryCount || 0,
+        tableSummary: data.tableSummary || null,
+        comparison: data.comparison || null,
+        cached: data.cached || false,
       }
       // Replace loading with streaming
       setMessages((prev) => [...prev.slice(0, -1), { ...assistantMsg, streamedContent: '' }])
@@ -936,7 +980,42 @@ export default function Home() {
     .catch(() => { window.print() })
   }, [])
 
+  // Fetch map data on mount
+  useEffect(() => { fetch('/api/map-data').then(r => r.json()).then(setMapData).catch(() => {}) }, [])
+
   const clearChat = useCallback(() => { setMessages([]) }, [])
+
+  // Export full briefing PDF
+  const handleExportBrief = useCallback(() => {
+    setIsExportingBrief(true)
+    const briefMessages = messages.filter(m => !m.isLoading && !m.streamedContent && m.content).map(m => ({
+      role: m.role,
+      content: m.content,
+      sql: m.sql,
+      results: m.results,
+      confidence: m.confidence,
+      responseTime: m.responseTime,
+      insight: m.insight,
+      tableSummary: m.tableSummary,
+      comparison: m.comparison,
+    }))
+    fetch('/api/export-brief', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: briefMessages }),
+    })
+    .then(res => res.blob())
+    .then(blob => {
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `ksp-briefing-${new Date().toISOString().slice(0, 10)}.pdf`
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    })
+    .catch(() => { window.print() })
+    .finally(() => setIsExportingBrief(false))
+  }, [messages])
   const handleDemo = useCallback(() => { sendMessage(DEMO_QUERY) }, [sendMessage])
 
   // Toggle SQL explanation for a message
@@ -1023,7 +1102,15 @@ export default function Home() {
                   <p className="text-[10px] text-muted-foreground">Conversational AI for Crime Database</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button onClick={() => setShowMap(true)} className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 px-2 py-1 rounded-md hover:bg-muted/50">
+                      <MapPin className="h-3 w-3" />Map
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Crime heatmap</TooltipContent>
+                </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <a href="/about" className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 px-2 py-1 rounded-md hover:bg-muted/50">
@@ -1048,6 +1135,16 @@ export default function Home() {
                   </TooltipTrigger>
                   <TooltipContent>Keyboard shortcuts</TooltipContent>
                 </Tooltip>
+                {messages.length >= 2 && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground gap-1" onClick={handleExportBrief} disabled={isExportingBrief}>
+                        <FileOutput className="h-3 w-3" />{isExportingBrief ? 'Exporting...' : 'Briefing'}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Export full session as PDF briefing</TooltipContent>
+                  </Tooltip>
+                )}
                 {messages.length > 0 && (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -1091,7 +1188,10 @@ export default function Home() {
                     <FeaturePill icon={ShieldQuestion} label="Confidence Scoring" />
                     <FeaturePill icon={Mic} label="Voice Input" />
                     <FeaturePill icon={FileText} label="Report Export" />
+                    <FeaturePill icon={GitCompare} label="Compare Queries" />
+                    <FeaturePill icon={MapPin} label="Crime Heatmap" />
                     <FeaturePill icon={Sparkles} label="Smart Follow-ups" />
+                    <FeaturePill icon={Zap} label="Query Cache" />
                   </div>
                   {stats && <DashboardStats stats={stats} />}
                   {/* Demo Banner for first-time visitors */}
@@ -1245,6 +1345,9 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* Crime Map Overlay */}
+      {showMap && mapData.length > 0 && <CrimeMapView data={mapData} onClose={() => setShowMap(false)} />}
 
       {/* Keyboard Shortcuts Overlay */}
       {showShortcuts && (
