@@ -17,44 +17,50 @@ export async function POST(request: NextRequest) {
     // Step 1: Extract FIR details via Catalyst Zia OCR
     const extractedData = await CatalystZiaService.extractFIRDocument(buffer, file.name);
 
-    // Step 2: Ensure CrimeType and PoliceStation exist, then create Case in Data Store
-    let station = await db.policeStation.findFirst({
-      where: { area: { contains: extractedData.location.split(",")[0] } },
+    // Step 2: Ensure Unit and CrimeSubHead exist, then create CaseMaster in Data Store
+    let unit = await db.unit.findFirst({
+      where: { UnitName: { contains: extractedData.location.split(",")[0] } },
     });
-    if (!station) {
-      station = await db.policeStation.findFirst();
+    if (!unit) {
+      unit = await db.unit.findFirst();
     }
 
-    let crimeType = await db.crimeType.findFirst({
-      where: { name: { contains: "Theft" } },
+    let crimeSubHead = await db.crimeSubHead.findFirst({
+      where: { CrimeHeadName: { contains: "Theft" } },
     });
-    if (!crimeType) {
-      crimeType = await db.crimeType.findFirst();
+    if (!crimeSubHead) {
+      crimeSubHead = await db.crimeSubHead.findFirst();
     }
 
-    if (station && crimeType) {
-      const createdCase = await db.case.create({
+    if (unit && crimeSubHead) {
+      const createdCase = await db.caseMaster.create({
         data: {
-          firNumber: extractedData.firNumber,
-          crimeTypeId: crimeType.id,
-          stationId: station.id,
-          status: "Open",
-          priority: "High",
-          filedDate: new Date(),
-          incidentDate: new Date(),
-          incidentTime: extractedData.incidentTime,
-          description: extractedData.briefFacts,
-          location: extractedData.location,
-          victimName: extractedData.victimName,
-          suspectName: extractedData.accusedName,
+          CrimeNo: extractedData.firNumber || `10443${unit.UnitID.toString().padStart(4, '0')}202600999`,
+          CaseNo: `202600999`,
+          CrimeRegisteredDate: new Date(),
+          PoliceStationID: unit.UnitID,
+          CrimeMajorHeadID: crimeSubHead.CrimeHeadID,
+          CrimeMinorHeadID: crimeSubHead.CrimeSubHeadID,
+          IncidentFromDate: new Date(),
+          BriefFacts: extractedData.briefFacts,
+          victims: {
+            create: [
+              { VictimName: extractedData.victimName || "Anonymous", GenderID: 1 }
+            ]
+          },
+          accused: {
+            create: [
+              { AccusedName: extractedData.accusedName || "Unidentified Suspect", GenderID: 1 }
+            ]
+          }
         },
       });
 
       // Step 3: Trigger Catalyst Signals Event
       await CatalystSignalsService.emitFIRInsertSignal({
-        firNumber: createdCase.firNumber,
-        crimeType: crimeType.name,
-        stationArea: station.area,
+        firNumber: createdCase.CrimeNo,
+        crimeType: crimeSubHead.CrimeHeadName,
+        stationArea: unit.UnitName,
         suspectName: extractedData.accusedName,
       });
     }

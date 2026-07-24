@@ -4,26 +4,23 @@ import { db } from "@/lib/db";
 
 export async function GET() {
   try {
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-    const recentCases = await db.case.findMany({
+    const recentCases = await db.caseMaster.findMany({
       take: 20,
-      orderBy: { filedDate: "desc" },
-      include: { crimeType: true, station: true },
+      orderBy: { CrimeRegisteredDate: "desc" },
+      include: { minorHead: true, policeStation: true, status: true },
     });
 
     const formattedCases = recentCases.map((c) => ({
-      firNumber: c.firNumber,
-      crimeType: c.crimeType?.name || "Theft",
-      station: c.station?.name || "Bangalore Station",
-      status: c.status,
-      priority: c.priority,
-      location: c.location,
+      firNumber: c.CrimeNo,
+      crimeType: c.minorHead?.CrimeHeadName || "Theft",
+      station: c.policeStation?.UnitName || "Bengaluru Police Station",
+      status: c.status?.CaseStatusName || "Open",
+      location: c.policeStation?.UnitName || "Bengaluru",
     }));
 
     const summaryBriefing = await CatalystQuickMLService.generateInvestigationSummary(
       "Daily 8 AM Executive FIR Intelligence Briefing for Karnataka State Police Command",
-      "SELECT firNumber, status, priority, location FROM Case WHERE filedDate >= yesterday ORDER BY filedDate DESC LIMIT 20",
+      "SELECT CrimeNo, CaseStatusID FROM CaseMaster ORDER BY CrimeRegisteredDate DESC LIMIT 20",
       formattedCases
     );
 

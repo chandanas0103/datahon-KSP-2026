@@ -7,65 +7,330 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model PoliceStation {
-  id          String    @id @default(cuid())
-  stationCode String    @unique
-  name        String
-  area        String
-  district    String
-  address     String
-  phone       String
-  officers    Officer[]
-  cases       Case[]
+model State {
+  StateID       Int        @id @default(autoincrement())
+  StateName     String
+  NationalityID Int?
+  Active        Boolean    @default(true)
+
+  districts     District[]
+  units         Unit[]
+  courts        Court[]
+  arrests       ArrestSurrender[]
 }
 
-model Officer {
-  id            String        @id @default(cuid())
-  badgeNumber   String        @unique
-  name          String
-  rank          String
-  phone         String
-  stationId     String
-  station       PoliceStation @relation(fields: [stationId], references: [id])
-  assignedCases Case[]
+model District {
+  DistrictID   Int        @id @default(autoincrement())
+  DistrictName String
+  StateID      Int
+  Active       Boolean    @default(true)
+
+  state        State      @relation(fields: [StateID], references: [StateID])
+  units        Unit[]
+  courts       Court[]
+  employees    Employee[]
+  arrests      ArrestSurrender[]
 }
 
-model CrimeType {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  category    String
-  isBailable  Boolean
-  description String
-  cases       Case[]
+model UnitType {
+  UnitTypeID   Int        @id @default(autoincrement())
+  UnitTypeName String
+  CityDistState String?
+  Hierarchy    Int?
+  Active       Boolean    @default(true)
+
+  units        Unit[]
 }
 
-model Case {
-  id           String        @id @default(cuid())
-  firNumber    String        @unique
-  crimeTypeId  String
-  crimeType    CrimeType     @relation(fields: [crimeTypeId], references: [id])
-  stationId    String
-  station      PoliceStation @relation(fields: [stationId], references: [id])
-  status       String
-  priority     String
-  assignedToId String?
-  assignedTo   Officer?      @relation(fields: [assignedToId], references: [id])
-  filedDate    DateTime
-  incidentDate DateTime
-  incidentTime String?
-  resolvedDate DateTime?
-  description  String
-  location     String
-  latitude     Float?
-  longitude    Float?
-  victimName   String?
-  victimAge    Int?
-  victimGender String?
-  suspectName  String?
-  suspectAge   Int?
-  suspectGender String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+model Unit {
+  UnitID        Int        @id @default(autoincrement())
+  UnitName      String
+  TypeID        Int?
+  ParentUnit    Int?
+  NationalityID Int?
+  StateID       Int?
+  DistrictID    Int?
+  Active        Boolean    @default(true)
+
+  unitType      UnitType?  @relation(fields: [TypeID], references: [UnitTypeID])
+  state         State?     @relation(fields: [StateID], references: [StateID])
+  district      District?  @relation(fields: [DistrictID], references: [DistrictID])
+  employees     Employee[]
+  cases         CaseMaster[]
+  arrests       ArrestSurrender[]
+}
+
+model Rank {
+  RankID    Int        @id @default(autoincrement())
+  RankName  String
+  Hierarchy Int?
+  Active    Boolean    @default(true)
+
+  employees Employee[]
+}
+
+model Designation {
+  DesignationID   Int        @id @default(autoincrement())
+  DesignationName String
+  Active          Boolean    @default(true)
+  SortOrder       Int?
+
+  employees       Employee[]
+}
+
+model Employee {
+  EmployeeID           Int          @id @default(autoincrement())
+  DistrictID           Int?
+  UnitID               Int?
+  RankID               Int?
+  DesignationID        Int?
+  KGID                 String       @unique
+  FirstName            String
+  EmployeeDOB          DateTime?
+  GenderID             Int?
+  BloodGroupID         Int?
+  PhysicallyChallenged Boolean?     @default(false)
+  AppointmentDate      DateTime?
+
+  district             District?    @relation(fields: [DistrictID], references: [DistrictID])
+  unit                 Unit?        @relation(fields: [UnitID], references: [UnitID])
+  rank                 Rank?        @relation(fields: [RankID], references: [RankID])
+  designation          Designation? @relation(fields: [DesignationID], references: [DesignationID])
+  registeredCases      CaseMaster[] @relation("RegisteredByEmployee")
+  investigatedArrests  ArrestSurrender[]
+  chargesheets         ChargesheetDetails[]
+}
+
+model Court {
+  CourtID    Int        @id @default(autoincrement())
+  CourtName  String
+  DistrictID Int?
+  StateID    Int?
+  Active     Boolean    @default(true)
+
+  district   District?  @relation(fields: [DistrictID], references: [DistrictID])
+  state      State?     @relation(fields: [StateID], references: [StateID])
+  cases      CaseMaster[]
+  arrests    ArrestSurrender[]
+}
+
+model CaseCategory {
+  CaseCategoryID Int          @id @default(autoincrement())
+  LookupValue    String
+
+  cases          CaseMaster[]
+}
+
+model GravityOffence {
+  GravityOffenceID Int          @id @default(autoincrement())
+  LookupValue      String
+
+  cases            CaseMaster[]
+}
+
+model CrimeHead {
+  CrimeHeadID    Int            @id @default(autoincrement())
+  CrimeGroupName String
+  Active         Boolean        @default(true)
+
+  subHeads       CrimeSubHead[]
+  cases          CaseMaster[]
+  headActSections CrimeHeadActSection[]
+}
+
+model CrimeSubHead {
+  CrimeSubHeadID Int         @id @default(autoincrement())
+  CrimeHeadID    Int
+  CrimeHeadName  String
+  SeqID          Int?
+
+  crimeHead      CrimeHead   @relation(fields: [CrimeHeadID], references: [CrimeHeadID])
+  cases          CaseMaster[]
+}
+
+model CaseStatusMaster {
+  CaseStatusID   Int          @id @default(autoincrement())
+  CaseStatusName String
+
+  cases          CaseMaster[]
+}
+
+model Act {
+  ActCode        String       @id
+  ActDescription String?
+  ShortName      String?
+  Active         Boolean      @default(true)
+
+  sections       Section[]
+  headActSections CrimeHeadActSection[]
+  caseAssociations ActSectionAssociation[]
+}
+
+model Section {
+  id                 Int         @id @default(autoincrement())
+  ActCode            String
+  SectionCode        String
+  SectionDescription String?
+  Active             Boolean     @default(true)
+
+  act                Act         @relation(fields: [ActCode], references: [ActCode])
+  caseAssociations   ActSectionAssociation[]
+
+  @@unique([ActCode, SectionCode])
+}
+
+model CrimeHeadActSection {
+  id          Int       @id @default(autoincrement())
+  CrimeHeadID Int
+  ActCode     String
+  SectionCode String
+
+  crimeHead   CrimeHead @relation(fields: [CrimeHeadID], references: [CrimeHeadID])
+  act         Act       @relation(fields: [ActCode], references: [ActCode])
+}
+
+model CasteMaster {
+  caste_master_id   Int                  @id @default(autoincrement())
+  caste_master_name String
+
+  complainants      ComplainantDetails[]
+}
+
+model ReligionMaster {
+  ReligionID   Int                  @id @default(autoincrement())
+  ReligionName String
+
+  complainants ComplainantDetails[]
+}
+
+model OccupationMaster {
+  OccupationID   Int                  @id @default(autoincrement())
+  OccupationName String
+
+  complainants   ComplainantDetails[]
+}
+
+model CaseMaster {
+  CaseMasterID        Int                     @id @default(autoincrement())
+  CrimeNo             String                  @unique
+  CaseNo              String
+  CrimeRegisteredDate DateTime
+  PolicePersonID      Int?
+  PoliceStationID     Int?
+  CaseCategoryID      Int?
+  GravityOffenceID    Int?
+  CrimeMajorHeadID    Int?
+  CrimeMinorHeadID    Int?
+  CaseStatusID        Int?
+  CourtID             Int?
+  IncidentFromDate    DateTime?
+  IncidentToDate      DateTime?
+  InfoReceivedPSDate  DateTime?
+  latitude            Float?
+  longitude           Float?
+  BriefFacts          String?
+
+  registeringOfficer  Employee?               @relation("RegisteredByEmployee", fields: [PolicePersonID], references: [EmployeeID])
+  policeStation       Unit?                   @relation(fields: [PoliceStationID], references: [UnitID])
+  category            CaseCategory?           @relation(fields: [CaseCategoryID], references: [CaseCategoryID])
+  gravity             GravityOffence?         @relation(fields: [GravityOffenceID], references: [GravityOffenceID])
+  majorHead           CrimeHead?              @relation(fields: [CrimeMajorHeadID], references: [CrimeHeadID])
+  minorHead           CrimeSubHead?           @relation(fields: [CrimeMinorHeadID], references: [CrimeSubHeadID])
+  status              CaseStatusMaster?       @relation(fields: [CaseStatusID], references: [CaseStatusID])
+  court               Court?                  @relation(fields: [CourtID], references: [CourtID])
+
+  complainants        ComplainantDetails[]
+  victims             Victim[]
+  accused             Accused[]
+  actSections         ActSectionAssociation[]
+  arrests             ArrestSurrender[]
+  chargesheets        ChargesheetDetails[]
+}
+
+model ComplainantDetails {
+  ComplainantID   Int               @id @default(autoincrement())
+  CaseMasterID    Int
+  ComplainantName String?
+  AgeYear         Int?
+  OccupationID    Int?
+  ReligionID      Int?
+  CasteID         Int?
+  GenderID        Int?
+
+  caseMaster      CaseMaster        @relation(fields: [CaseMasterID], references: [CaseMasterID])
+  occupation      OccupationMaster? @relation(fields: [OccupationID], references: [OccupationID])
+  religion        ReligionMaster?   @relation(fields: [ReligionID], references: [ReligionID])
+  caste           CasteMaster?      @relation(fields: [CasteID], references: [caste_master_id])
+}
+
+model ActSectionAssociation {
+  id             Int        @id @default(autoincrement())
+  CaseMasterID   Int
+  ActID          String
+  SectionID      Int
+  ActOrderID     Int?
+  SectionOrderID Int?
+
+  caseMaster     CaseMaster @relation(fields: [CaseMasterID], references: [CaseMasterID])
+  act            Act        @relation(fields: [ActID], references: [ActCode])
+  section        Section    @relation(fields: [SectionID], references: [id])
+}
+
+model Victim {
+  VictimMasterID Int        @id @default(autoincrement())
+  CaseMasterID   Int
+  VictimName     String?
+  AgeYear        Int?
+  GenderID       Int?
+  VictimPolice   String?
+
+  caseMaster     CaseMaster @relation(fields: [CaseMasterID], references: [CaseMasterID])
+}
+
+model Accused {
+  AccusedMasterID Int               @id @default(autoincrement())
+  CaseMasterID    Int
+  AccusedName     String?
+  AgeYear         Int?
+  GenderID        Int?
+  PersonID        String?
+
+  caseMaster      CaseMaster        @relation(fields: [CaseMasterID], references: [CaseMasterID])
+  arrests         ArrestSurrender[]
+}
+
+model ArrestSurrender {
+  ArrestSurrenderID        Int       @id @default(autoincrement())
+  CaseMasterID             Int
+  ArrestSurrenderTypeID    Int?
+  ArrestSurrenderDate      DateTime?
+  ArrestSurrenderStateId   Int?
+  ArrestSurrenderDistrictId Int?
+  PoliceStationID          Int?
+  IOID                     Int?
+  CourtID                  Int?
+  AccusedMasterID          Int?
+  IsAccused                Boolean?  @default(true)
+  IsComplainantAccused     Boolean?  @default(false)
+
+  caseMaster               CaseMaster @relation(fields: [CaseMasterID], references: [CaseMasterID])
+  state                    State?     @relation(fields: [ArrestSurrenderStateId], references: [StateID])
+  district                 District?  @relation(fields: [ArrestSurrenderDistrictId], references: [DistrictID])
+  unit                     Unit?      @relation(fields: [PoliceStationID], references: [UnitID])
+  investigatingOfficer     Employee?  @relation(fields: [IOID], references: [EmployeeID])
+  court                    Court?     @relation(fields: [CourtID], references: [CourtID])
+  accused                  Accused?   @relation(fields: [AccusedMasterID], references: [AccusedMasterID])
+}
+
+model ChargesheetDetails {
+  CSID           Int        @id @default(autoincrement())
+  CaseMasterID   Int
+  csdate         DateTime?
+  cstype         String?
+  PolicePersonID Int?
+
+  caseMaster     CaseMaster @relation(fields: [CaseMasterID], references: [CaseMasterID])
+  employee       Employee?  @relation(fields: [PolicePersonID], references: [EmployeeID])
 }
 
 model QueryLog {

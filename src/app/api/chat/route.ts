@@ -4,83 +4,111 @@ import ZAI from "z-ai-web-dev-sdk";
 import { CatalystQuickMLService, CatalystDataStoreService, CatalystCircuitsService } from "@/lib/catalyst";
 
 const SCHEMA_CONTEXT = `
-You are a Text-to-SQL assistant for the Karnataka State Police (KSP) Crime Database.
+You are a Text-to-SQL assistant for the official Karnataka State Police (KSP) FIR Database.
 You MUST return ONLY valid SQLite SQL queries. No explanations, no markdown, no code fences.
 
 DATABASE SCHEMA:
 
-Table: PoliceStation
-  - id (TEXT, PK)
-  - stationCode (TEXT, UNIQUE) - e.g. "PS-WF-01"
-  - name (TEXT) - Full station name
-  - area (TEXT) - Area name e.g. "Whitefield", "Indiranagar", "Koramangala", "HSR Layout", "JP Nagar", "BTM Layout", "Marathahalli", "Electronic City", "Sarjapur Road", "Rajajinagar"
-  - district (TEXT) - e.g. "Bangalore Urban"
-  - address (TEXT)
-  - phone (TEXT)
+Table: CaseMaster
+  - CaseMasterID (INTEGER, PK)
+  - CrimeNo (TEXT, UNIQUE) - Structured 19-digit FIR number e.g. "104430006202600001"
+  - CaseNo (TEXT) - e.g. "202600001"
+  - CrimeRegisteredDate (DATETIME) - Registration timestamp
+  - PolicePersonID (INTEGER, FK -> Employee.EmployeeID) - Registering officer ID
+  - PoliceStationID (INTEGER, FK -> Unit.UnitID) - Police Station ID
+  - CaseCategoryID (INTEGER, FK -> CaseCategory.CaseCategoryID) - FIR, UDR, Zero FIR
+  - GravityOffenceID (INTEGER, FK -> GravityOffence.GravityOffenceID) - Heinous, Non-Heinous
+  - CrimeMajorHeadID (INTEGER, FK -> CrimeHead.CrimeHeadID) - Major crime classification
+  - CrimeMinorHeadID (INTEGER, FK -> CrimeSubHead.CrimeSubHeadID) - Minor crime subhead
+  - CaseStatusID (INTEGER, FK -> CaseStatusMaster.CaseStatusID) - Open, Under Investigation, Closed, Charge Sheeted
+  - CourtID (INTEGER, FK -> Court.CourtID)
+  - IncidentFromDate (DATETIME), IncidentToDate (DATETIME)
+  - latitude (REAL), longitude (REAL), BriefFacts (TEXT)
 
-Table: Officer
-  - id (TEXT, PK)
-  - badgeNumber (TEXT, UNIQUE) - e.g. "BLR-001"
-  - name (TEXT) - Officer name
-  - rank (TEXT) - "Inspector" or "Sub-Inspector"
-  - stationId (TEXT, FK -> PoliceStation.id)
-  - phone (TEXT)
+Table: Unit
+  - UnitID (INTEGER, PK)
+  - UnitName (TEXT) - Police Station name e.g. "Whitefield Police Station", "Indiranagar Police Station", "Koramangala Police Station", "HSR Layout Police Station", "JP Nagar Police Station", "BTM Layout Police Station", "Marathahalli Police Station", "Electronic City Police Station", "Sarjapur Road Police Station", "Rajajinagar Police Station"
+  - DistrictID (INTEGER, FK -> District.DistrictID)
+  - StateID (INTEGER, FK -> State.StateID)
 
-Table: CrimeType
-  - id (TEXT, PK)
-  - name (TEXT, UNIQUE) - e.g. "Theft", "Burglary", "Robbery", "Assault", "Cheating", "Cyber Crime", "Vehicle Theft", "Chain Snatching", "Murder", "Rape", "Kidnapping", "Fraud", "Vandalism", "Domestic Violence", "Drug Offense"
-  - category (TEXT) - "Property Crime", "Violent Crime", "Fraud", "Cyber Crime", "Personal Crime", "Narcotics"
-  - isBailable (INTEGER, 0/1)
-  - description (TEXT)
+Table: Employee
+  - EmployeeID (INTEGER, PK)
+  - KGID (TEXT, UNIQUE) - Karnataka Government Employee ID e.g. "KGID-2021-001"
+  - FirstName (TEXT) - Officer name e.g. "Ravi Kumar", "Priya Sharma", "Anand Reddy"
+  - UnitID (INTEGER, FK -> Unit.UnitID)
+  - RankID (INTEGER, FK -> Rank.RankID) - Inspector, Sub-Inspector
+  - DesignationID (INTEGER, FK -> Designation.DesignationID) - Station House Officer, Investigating Officer
 
-Table: Case
-  - id (TEXT, PK)
-  - firNumber (TEXT, UNIQUE) - e.g. "FIR/BLR/2025/0001"
-  - crimeTypeId (TEXT, FK -> CrimeType.id)
-  - stationId (TEXT, FK -> PoliceStation.id)
-  - status (TEXT) - "Open", "Under Investigation", "Closed", "Charge Sheeted", "Acquitted", "Compromised"
-  - priority (TEXT) - "Low", "Medium", "High", "Critical"
-  - assignedToId (TEXT, FK -> Officer.id, nullable)
-  - filedDate (INTEGER) - Unix timestamp in MILLISECONDS (not text!)
-  - incidentDate (INTEGER) - Unix timestamp in MILLISECONDS (not text!)
-  - incidentTime (TEXT) - HH:MM format
-  - resolvedDate (TEXT/DateTime, nullable)
-  - description (TEXT)
-  - location (TEXT)
-  - latitude (REAL)
-  - longitude (REAL)
-  - victimName (TEXT, nullable)
-  - victimAge (INTEGER, nullable)
-  - victimGender (TEXT, nullable) - "Male" or "Female"
-  - suspectName (TEXT, nullable)
-  - suspectAge (INTEGER, nullable)
-  - suspectGender (TEXT, nullable)
+Table: Victim
+  - VictimMasterID (INTEGER, PK)
+  - CaseMasterID (INTEGER, FK -> CaseMaster.CaseMasterID)
+  - VictimName (TEXT), AgeYear (INTEGER), GenderID (INTEGER: 1=Male, 2=Female), VictimPolice (TEXT)
+
+Table: Accused
+  - AccusedMasterID (INTEGER, PK)
+  - CaseMasterID (INTEGER, FK -> CaseMaster.CaseMasterID)
+  - AccusedName (TEXT), AgeYear (INTEGER), GenderID (INTEGER: 1=Male, 2=Female), PersonID (TEXT)
+
+Table: Act
+  - ActCode (TEXT, PK) - e.g. "IPC", "IT_ACT"
+  - ActDescription (TEXT), ShortName (TEXT)
+
+Table: Section
+  - id (INTEGER, PK)
+  - ActCode (TEXT, FK -> Act.ActCode)
+  - SectionCode (TEXT) - e.g. "302", "379", "380", "420", "66D"
+  - SectionDescription (TEXT)
+
+Table: ActSectionAssociation
+  - id (INTEGER, PK)
+  - CaseMasterID (INTEGER, FK -> CaseMaster.CaseMasterID)
+  - ActID (TEXT, FK -> Act.ActCode)
+  - SectionID (INTEGER, FK -> Section.id)
+
+Table: ArrestSurrender
+  - ArrestSurrenderID (INTEGER, PK)
+  - CaseMasterID (INTEGER, FK -> CaseMaster.CaseMasterID)
+  - ArrestSurrenderDate (DATETIME)
+  - PoliceStationID (INTEGER, FK -> Unit.UnitID)
+  - IOID (INTEGER, FK -> Employee.EmployeeID) - Investigating Officer ID
+  - AccusedMasterID (INTEGER, FK -> Accused.AccusedMasterID)
+
+Table: ChargesheetDetails
+  - CSID (INTEGER, PK)
+  - CaseMasterID (INTEGER, FK -> CaseMaster.CaseMasterID)
+  - csdate (DATETIME), cstype (TEXT), PolicePersonID (INTEGER, FK -> Employee.EmployeeID)
+
+Table: CrimeHead
+  - CrimeHeadID (INTEGER, PK), CrimeGroupName (TEXT) - "Property Crime", "Violent Crime", "Cyber Crime", "Fraud"
+
+Table: CrimeSubHead
+  - CrimeSubHeadID (INTEGER, PK), CrimeHeadID (INTEGER, FK -> CrimeHead.CrimeHeadID), CrimeHeadName (TEXT) - "Theft", "Burglary", "Murder", "Robbery", "Online Financial Fraud", "Cheating"
+
+Table: CaseStatusMaster
+  - CaseStatusID (INTEGER, PK), CaseStatusName (TEXT) - "Open", "Under Investigation", "Closed", "Charge Sheeted"
 
 RULES:
 1. ONLY generate SELECT queries. NEVER generate INSERT, UPDATE, DELETE, DROP, ALTER, or any DML/DDL.
-2. Use JOINs to connect tables when needed. Always use the proper FK relationships.
-3. CRITICAL: filedDate and incidentDate are stored as INTEGER (Unix milliseconds). NEVER compare them directly with text date strings. Always convert using: filedDate / 1000 to get seconds, then use 'unixepoch' modifier.
-4. For date filtering, use: filedDate >= (strftime('%s', 'now', '-N months') * 1000)
-5. For extracting year/month, use: strftime('%Y', filedDate / 1000, 'unixepoch', 'localtime') or strftime('%Y-%m', filedDate / 1000, 'unixepoch', 'localtime')
-6. For extracting readable date: date(filedDate / 1000, 'unixepoch', 'localtime')
-7. Use GROUP BY with COUNT, AVG, MAX, MIN for aggregate queries.
-8. Use ORDER BY for sorting results.
-9. Use LIMIT to restrict results (default 20 max).
-10. Use LIKE for partial text matching.
-11. Return ONLY the raw SQL query. No explanation, no markdown formatting.
+2. Join Unit for station location/name (e.g. UnitName LIKE '%Whitefield%').
+3. Join Employee for officer details (e.g. FirstName LIKE '%Ravi Kumar%' or KGID = 'KGID-2021-001').
+4. Join CrimeSubHead for crime types (e.g. CrimeHeadName = 'Theft' or 'Murder').
+5. Join Act and Section via ActSectionAssociation for legal section queries (e.g. SectionCode = '302' or SectionCode = '379').
+6. For date filtering in SQLite, CrimeRegisteredDate is stored as ISO string or timestamp.
+7. Limit results to 20 by default unless aggregated.
+8. Return ONLY raw SQL. No explanations or code fences.
 
 EXAMPLES:
-Q: "How many theft cases were filed in Whitefield last month?"
-SQL: SELECT COUNT(*) as total_cases FROM \`Case\` c JOIN PoliceStation ps ON c.stationId = ps.id JOIN CrimeType ct ON c.crimeTypeId = ct.id WHERE ps.area = 'Whitefield' AND ct.name = 'Theft' AND c.filedDate >= (strftime('%s', 'now', '-1 month') * 1000);
+Q: "Show theft cases registered in Whitefield Police Station"
+SQL: SELECT cm.CrimeNo, cm.CaseNo, u.UnitName, csh.CrimeHeadName, cm.BriefFacts, cm.CrimeRegisteredDate FROM CaseMaster cm JOIN Unit u ON cm.PoliceStationID = u.UnitID JOIN CrimeSubHead csh ON cm.CrimeMinorHeadID = csh.CrimeSubHeadID WHERE u.UnitName LIKE '%Whitefield%' AND csh.CrimeHeadName = 'Theft' ORDER BY cm.CrimeRegisteredDate DESC LIMIT 20;
 
-Q: "Show open cases assigned to Officer Ravi Kumar"
-SQL: SELECT c.firNumber, c.description, date(c.filedDate / 1000, 'unixepoch', 'localtime') as filed_date, c.status, c.priority FROM \`Case\` c JOIN Officer o ON c.assignedToId = o.id WHERE o.name LIKE '%Ravi Kumar%' AND c.status = 'Open' ORDER BY c.filedDate DESC LIMIT 20;
+Q: "Show cases registered under IPC Section 302"
+SQL: SELECT cm.CrimeNo, cm.CaseNo, u.UnitName, a.ActCode, s.SectionCode, s.SectionDescription, cm.BriefFacts FROM CaseMaster cm JOIN ActSectionAssociation asa ON cm.CaseMasterID = asa.CaseMasterID JOIN Act a ON asa.ActID = a.ActCode JOIN Section s ON asa.SectionID = s.id JOIN Unit u ON cm.PoliceStationID = u.UnitID WHERE s.SectionCode = '302' LIMIT 20;
 
-Q: "What's the most common crime type in Indiranagar this year?"
-SQL: SELECT ct.name as crime_type, COUNT(*) as case_count FROM \`Case\` c JOIN PoliceStation ps ON c.stationId = ps.id JOIN CrimeType ct ON c.crimeTypeId = ct.id WHERE ps.area = 'Indiranagar' AND strftime('%Y', c.filedDate / 1000, 'unixepoch', 'localtime') = strftime('%Y', 'now') GROUP BY ct.name ORDER BY case_count DESC LIMIT 10;
+Q: "List cases handled by Officer Ravi Kumar"
+SQL: SELECT cm.CrimeNo, cm.CaseNo, e.FirstName as OfficerName, e.KGID, csh.CrimeHeadName, csm.CaseStatusName FROM CaseMaster cm JOIN Employee e ON cm.PolicePersonID = e.EmployeeID JOIN CrimeSubHead csh ON cm.CrimeMinorHeadID = csh.CrimeSubHeadID JOIN CaseStatusMaster csm ON cm.CaseStatusID = csm.CaseStatusID WHERE e.FirstName LIKE '%Ravi Kumar%' LIMIT 20;
 
-Q: "Show all high priority cases from last 3 months"
-SQL: SELECT c.firNumber, ct.name as crime_type, ps.name as station, c.status, date(c.filedDate / 1000, 'unixepoch', 'localtime') as filed_date, c.priority FROM \`Case\` c JOIN CrimeType ct ON c.crimeTypeId = ct.id JOIN PoliceStation ps ON c.stationId = ps.id WHERE c.priority = 'High' AND c.filedDate >= (strftime('%s', 'now', '-3 months') * 1000) ORDER BY c.filedDate DESC LIMIT 20;
+Q: "How many cases were filed per police station?"
+SQL: SELECT u.UnitName as station_name, COUNT(cm.CaseMasterID) as total_cases FROM Unit u LEFT JOIN CaseMaster cm ON u.UnitID = cm.PoliceStationID GROUP BY u.UnitName ORDER BY total_cases DESC;
 `;
 
 const TRANSLATION_PROMPT = `You are a translator for Indian police queries. Translate the following query to English if it is in Kannada, Hindi, or any other language. If it is already in English, return it exactly as-is. Return ONLY the translated text, nothing else.
@@ -317,7 +345,6 @@ export async function POST(request: NextRequest) {
       }
 
       // Execute
-      const t2 = Date.now();
       try {
         const rawResults = await db.$queryRawUnsafe(sql);
         results = serializeResults(rawResults as Record<string, unknown>[]);
@@ -346,7 +373,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Step 3: Generate natural answer, SQL explanation, QuickML Investigation Briefing, & Related Cases (parallel)
+    // Step 3: Generate natural answer & SQL explanation
     const t3 = Date.now();
     const [answer, sqlExplanation, investigationBriefing, relatedCases, circuitState] = await Promise.all([
       Promise.resolve(generateNaturalAnswer(translatedQuestion, sql, results)),
@@ -363,7 +390,7 @@ export async function POST(request: NextRequest) {
       generateFollowups(translatedQuestion, results),
     ]);
     const confidenceTime = Date.now() - t4;
-    const sqlGenTimeFinal = t3 - t1; // total SQL gen time (including retries)
+    const sqlGenTimeFinal = t3 - t1; // total SQL gen time
 
     // Step 5: Log the query
     await db.queryLog.create({
