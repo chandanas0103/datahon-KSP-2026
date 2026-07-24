@@ -124,19 +124,32 @@ function serializeResults(
 }
 
 function validateSQL(sql: string): { valid: boolean; reason?: string } {
-  const normalized = sql.replace(/\s+/g, " ").trim().toLowerCase();
+  // Strip comments
+  const stripped = sql
+    .replace(/--.*$/gm, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const normalized = stripped.toLowerCase();
   const forbidden = [
-    /\b(insert|update|delete|drop|alter|create|truncate|grant|revoke)\b/,
-    /;\s*(insert|update|delete|drop|alter|create|truncate)/i,
+    /\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|pragma|attach|detach|vacuum|execute|exec)\b/i,
   ];
   for (const pattern of forbidden) {
     if (pattern.test(normalized)) {
       return { valid: false, reason: "Only SELECT queries are allowed for safety." };
     }
   }
-  if (!normalized.startsWith("select")) {
+
+  if (!normalized.startsWith("select") && !normalized.startsWith("with")) {
     return { valid: false, reason: "Only SELECT queries are permitted." };
   }
+
+  const statements = stripped.split(";").filter((s) => s.trim().length > 0);
+  if (statements.length > 1) {
+    return { valid: false, reason: "Multiple SQL statements are not allowed." };
+  }
+
   return { valid: true };
 }
 
@@ -173,7 +186,7 @@ function generateNaturalAnswer(
   return `Found **${totalRows}** results. Top results:\n${summary}${more}`;
 }
 
-async function callLLM(messages: { role: string; content: string }[], temperature = 0.1): Promise<string> {
+async function callLLM(messages: { role: "user" | "system" | "assistant"; content: string }[], temperature = 0.1): Promise<string> {
   const zai = await ZAI.create();
   const completion = await zai.chat.completions.create({
     messages,

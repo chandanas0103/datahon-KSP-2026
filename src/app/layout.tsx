@@ -1,24 +1,13 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "KSP Crime Intelligence — Conversational AI for Crime Database",
+  title: "KSP Crime Intelligence AI — Karnataka State Police",
   description:
-    "KSP Datathon 2026 Challenge 1: Ask questions in natural language and get instant answers from the Karnataka State Police Crime Database using Text-to-SQL AI.",
+    "Karnataka State Police Datathon 2026: Advanced Tactical Crime Intelligence Command Center powered by Text-to-SQL AI.",
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: "/ksp_logo.jpg",
   },
 };
 
@@ -29,9 +18,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
-      >
+      <body className="antialiased bg-background text-foreground min-h-screen">
         {children}
         <Toaster />
       </body>

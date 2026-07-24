@@ -7,328 +7,72 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ═══════════════════════════════════════════════════════════
-// MASTER TABLES — Karnataka State Police FIR System
-// ═══════════════════════════════════════════════════════════
-
-model State {
-  id        String     @id @default(cuid())
-  stateCode String     @unique
-  stateName String
-  districts District[]
-}
-
-model District {
-  id           String   @id @default(cuid())
-  districtCode String   @unique
-  districtName String
-  stateId      String
-  state        State    @relation(fields: [stateId], references: [id])
-  units        Unit[]
-}
-
-model UnitType {
-  id       String @id @default(cuid())
-  typeName String @unique
-  units    Unit[]
-}
-
-model Unit {
-  id          String   @id @default(cuid())
-  unitCode    String   @unique
-  unitName    String
-  unitTypeId  String
-  districtId  String
+model PoliceStation {
+  id          String    @id @default(cuid())
+  stationCode String    @unique
+  name        String
+  area        String
+  district    String
   address     String
-  phone       String?
-  latitude    Float?
-  longitude   Float?
-  createdAt   DateTime @default(now())
-  unitType    UnitType @relation(fields: [unitTypeId], references: [id])
-  district    District @relation(fields: [districtId], references: [id])
-  employees   Employee[]
-  cases       CaseMaster[]
+  phone       String
+  officers    Officer[]
+  cases       Case[]
 }
 
-model Rank {
-  id       String     @id @default(cuid())
-  rankName String     @unique
-  employees Employee[]
+model Officer {
+  id            String        @id @default(cuid())
+  badgeNumber   String        @unique
+  name          String
+  rank          String
+  phone         String
+  stationId     String
+  station       PoliceStation @relation(fields: [stationId], references: [id])
+  assignedCases Case[]
 }
 
-model Designation {
-  id             String     @id @default(cuid())
-  designationName String     @unique
-  employees      Employee[]
+model CrimeType {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  category    String
+  isBailable  Boolean
+  description String
+  cases       Case[]
 }
 
-model Employee {
-  id                  String     @id @default(cuid())
-  employeeCode        String     @unique
-  name                String
-  rankId              String
-  designationId       String
-  unitId              String
-  phone               String?
-  email               String?
-  dateOfJoining       DateTime?
-  createdAt           DateTime   @default(now())
-  rank                Rank       @relation(fields: [rankId], references: [id])
-  designation         Designation @relation(fields: [designationId], references: [id])
-  unit                Unit       @relation(fields: [unitId], references: [id])
-  caseInvestigations CaseMaster[] @relation("InvestigatingOfficer")
+model Case {
+  id           String        @id @default(cuid())
+  firNumber    String        @unique
+  crimeTypeId  String
+  crimeType    CrimeType     @relation(fields: [crimeTypeId], references: [id])
+  stationId    String
+  station      PoliceStation @relation(fields: [stationId], references: [id])
+  status       String
+  priority     String
+  assignedToId String?
+  assignedTo   Officer?      @relation(fields: [assignedToId], references: [id])
+  filedDate    DateTime
+  incidentDate DateTime
+  incidentTime String?
+  resolvedDate DateTime?
+  description  String
+  location     String
+  latitude     Float?
+  longitude    Float?
+  victimName   String?
+  victimAge    Int?
+  victimGender String?
+  suspectName  String?
+  suspectAge   Int?
+  suspectGender String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 }
-
-model Act {
-  id      String                  @id @default(cuid())
-  actCode String                  @unique
-  actName String
-  sections Section[]
-  caseActs ActSectionAssociation[]
-  crimeHeadMappings CrimeHeadActSection[]
-}
-
-model Section {
-  id          String                 @id @default(cuid())
-  sectionCode String                 @unique
-  sectionName String
-  isBailable  Boolean                @default(true)
-  isCognizable Boolean               @default(true)
-  actId       String
-  act         Act                    @relation(fields: [actId], references: [id])
-  caseSections ActSectionAssociation[]
-  crimeHeadMappings CrimeHeadActSection[]
-}
-
-model CrimeHead {
-  id                String              @id @default(cuid())
-  crimeHeadCode     String              @unique
-  crimeHeadName     String
-  crimeSubHeads     CrimeSubHead[]
-  actSectionMappings CrimeHeadActSection[]
-  cases             CaseMaster[]
-}
-
-model CrimeSubHead {
-  id            String       @id @default(cuid())
-  subHeadCode   String       @unique
-  subHeadName   String
-  crimeHeadId   String
-  crimeHead     CrimeHead    @relation(fields: [crimeHeadId], references: [id])
-  cases         CaseMaster[]
-}
-
-model CrimeHeadActSection {
-  id          String     @id @default(cuid())
-  crimeHeadId String
-  sectionId   String
-  actId       String
-  crimeHead   CrimeHead  @relation(fields: [crimeHeadId], references: [id])
-  section     Section    @relation(fields: [sectionId], references: [id])
-  act         Act        @relation(fields: [actId], references: [id])
-  @@unique([crimeHeadId, sectionId, actId])
-}
-
-model CaseCategory {
-  id           String       @id @default(cuid())
-  categoryCode String       @unique
-  categoryName String
-  cases        CaseMaster[]
-}
-
-model CaseStatusMaster {
-  id         String       @id @default(cuid())
-  statusCode String       @unique
-  statusName String
-  cases      CaseMaster[]
-}
-
-model GravityOffence {
-  id          String       @id @default(cuid())
-  gravityCode String       @unique
-  gravityName String
-  cases       CaseMaster[]
-}
-
-model Court {
-  id          String              @id @default(cuid())
-  courtCode   String              @unique
-  courtName   String
-  courtType   String
-  address     String?
-  chargesheets ChargesheetDetails[]
-}
-
-model CasteMaster {
-  id          String       @id @default(cuid())
-  casteCode   String       @unique
-  casteName   String
-  victimCastes     Victim[]     @relation("VictimCaste")
-  accusedCastes    Accused[]    @relation("AccusedCaste")
-  complainantCastes Complainant[] @relation("ComplainantCaste")
-}
-
-model ReligionMaster {
-  id           String       @id @default(cuid())
-  religionCode String       @unique
-  religionName String
-  victimReligions     Victim[]     @relation("VictimReligion")
-  accusedReligions    Accused[]    @relation("AccusedReligion")
-  complainantReligions Complainant[] @relation("ComplainantReligion")
-}
-
-model OccupationMaster {
-  id              String       @id @default(cuid())
-  occupationCode  String       @unique
-  occupationName  String
-  victimOccupations     Victim[]     @relation("VictimOccupation")
-  accusedOccupations    Accused[]    @relation("AccusedOccupation")
-  complainantOccupations Complainant[] @relation("ComplainantOccupation")
-}
-
-// ═══════════════════════════════════════════════════════════
-// TRANSACTION TABLES — FIR Records
-// ═══════════════════════════════════════════════════════════
-
-model CaseMaster {
-  id                   String             @id @default(cuid())
-  crimeNo              String             @unique
-  firNumber            String
-  crimeHeadId          String
-  crimeSubHeadId       String?
-  caseCategoryId       String
-  caseStatusId         String
-  gravityId            String
-  unitId               String
-  investigatingOfficerId String?
-  firDate              DateTime
-  incidentDate         DateTime
-  incidentTime         String?
-  detectionDate        DateTime?
-  arrestDate           DateTime?
-  chargesheetDate      DateTime?
-  location             String
-  latitude             Float?
-  longitude            Float?
-  gpsCoordinates       String?
-  briefFacts           String
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
-
-  crimeHead            CrimeHead          @relation(fields: [crimeHeadId], references: [id])
-  crimeSubHead         CrimeSubHead?       @relation(fields: [crimeSubHeadId], references: [id])
-  caseCategory         CaseCategory        @relation(fields: [caseCategoryId], references: [id])
-  caseStatus           CaseStatusMaster    @relation(fields: [caseStatusId], references: [id])
-  gravity              GravityOffence      @relation(fields: [gravityId], references: [id])
-  unit                 Unit               @relation(fields: [unitId], references: [id])
-  investigatingOfficer Employee?          @relation("InvestigatingOfficer", fields: [investigatingOfficerId], references: [id])
-
-  complainants         Complainant[]
-  victims              Victim[]
-  accused              Accused[]
-  actSections          ActSectionAssociation[]
-  chargesheets         ChargesheetDetails[]
-}
-
-model Complainant {
-  id                String            @id @default(cuid())
-  caseId            String
-  personName        String
-  age               Int?
-  gender            String?
-  address           String?
-  phone             String?
-  casteId           String?
-  religionId        String?
-  occupationId      String?
-  relationToVictim  String?
-  case              CaseMaster       @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  caste             CasteMaster?     @relation("ComplainantCaste", fields: [casteId], references: [id])
-  religion          ReligionMaster?   @relation("ComplainantReligion", fields: [religionId], references: [id])
-  occupation        OccupationMaster? @relation("ComplainantOccupation", fields: [occupationId], references: [id])
-}
-
-model Victim {
-  id              String            @id @default(cuid())
-  caseId          String
-  personName      String
-  age             Int?
-  gender          String?
-  address         String?
-  phone           String?
-  casteId         String?
-  religionId      String?
-  occupationId    String?
-  injuryDetail    String?
-  case            CaseMaster       @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  caste           CasteMaster?     @relation("VictimCaste", fields: [casteId], references: [id])
-  religion        ReligionMaster?   @relation("VictimReligion", fields: [religionId], references: [id])
-  occupation      OccupationMaster? @relation("VictimOccupation", fields: [occupationId], references: [id])
-}
-
-model Accused {
-  id           String            @id @default(cuid())
-  caseId       String
-  personId     String
-  personName   String
-  age          Int?
-  gender       String?
-  address      String?
-  phone        String?
-  casteId      String?
-  religionId   String?
-  occupationId String?
-  arrestStatus String?
-  case         CaseMaster       @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  caste        CasteMaster?     @relation("AccusedCaste", fields: [casteId], references: [id])
-  religion     ReligionMaster?   @relation("AccusedReligion", fields: [religionId], references: [id])
-  occupation   OccupationMaster? @relation("AccusedOccupation", fields: [occupationId], references: [id])
-  arrests      ArrestSurrender[]
-}
-
-model ArrestSurrender {
-  id                String   @id @default(cuid())
-  accusedId         String
-  arrestType        String
-  arrestDate        DateTime
-  arrestingOfficer  String?
-  remarks           String?
-  accused           Accused  @relation(fields: [accusedId], references: [id])
-}
-
-model ActSectionAssociation {
-  id         String     @id @default(cuid())
-  caseId     String
-  actId      String
-  sectionId  String
-  case       CaseMaster @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  act        Act        @relation(fields: [actId], references: [id])
-  section    Section    @relation(fields: [sectionId], references: [id])
-  @@unique([caseId, actId, sectionId])
-}
-
-model ChargesheetDetails {
-  id                 String      @id @default(cuid())
-  caseId             String
-  courtId            String
-  filingDate         DateTime
-  chargesheetNumber  String?
-  totalAccused       Int
-  status             String?
-  remarks            String?
-  case               CaseMaster  @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  court              Court       @relation(fields: [courtId], references: [id])
-}
-
-// ═══════════════════════════════════════════════════════════
-// APPLICATION TABLES
-// ═══════════════════════════════════════════════════════════
 
 model QueryLog {
-  id         String   @id @default(cuid())
-  question   String
-  sqlQuery   String
-  sqlResult  String?
-  answer     String?
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  question  String
+  sqlQuery  String
+  sqlResult String?
+  answer    String?
+  createdAt DateTime @default(now())
 }
