@@ -80,7 +80,7 @@ if [ -f "./next-service-dist/server.js" ]; then
     fi
     
     # 后台启动 Next.js
-    (node server.js || bun server.js) &
+    bun server.js &
     NEXT_PID=$!
     pids="$NEXT_PID"
     

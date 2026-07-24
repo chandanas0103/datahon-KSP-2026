@@ -1,10 +1,6 @@
-"use client";
-
-import { Shield, Brain, Wrench, Languages, Mic, FileText, Sparkles, ShieldCheck, Database, BarChart3, Zap, ArrowLeft, Award, CheckCircle2 } from "lucide-react";
+import { Shield, Brain, Wrench, Languages, Mic, FileText, Sparkles, ShieldCheck, Database, BarChart3, Zap, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 
 const features = [
   {
@@ -52,8 +48,8 @@ const features = [
   {
     icon: FileText,
     title: "Report Export",
-    description: "Any query result can be exported as a professionally formatted HTML report with KSP branding, suitable for printing or sharing. Includes query, answer, SQL, results table, and metadata.",
-    tech: ["HTML report generation", "KSP branded styling", "Print-optimized CSS"],
+    description: "Any query result can be exported as a professionally formatted PDF report with KSP branding, suitable for printing or sharing. Includes query, answer, SQL, results table, and metadata.",
+    tech: ["jsPDF & jspdf-autotable", "KSP branded styling", "Client-side PDF generation"],
   },
   {
     icon: Database,
@@ -69,85 +65,74 @@ const features = [
   },
   {
     icon: Zap,
-    title: "Tactical Dark Command Theme",
-    description: "A premium glassmorphic interface built using Tailwind CSS 4 with KSP gold and electric blue accents, glowing status indicators, and responsive design across all screen sizes.",
-    tech: ["Glassmorphism", "Tailwind CSS 4", "Custom Glow Effects"],
+    title: "KSP Branded Dark Theme",
+    description: "A premium dark interface using oklch color space with police navy blue and gold accent colors. Animated stat counters, glassmorphism effects, and responsive design across all screen sizes.",
+    tech: ["oklch color system", "Tailwind CSS 4", "Animated counters"],
   },
 ];
 
 const architecture = [
-  { layer: "Frontend", tech: "Next.js 16 (App Router), React 19, Tailwind CSS 4, Recharts, Lucide Icons" },
-  { layer: "API Layer", tech: "Next.js Route Handlers (GET /api/stats, GET /api/analytics, POST /api/chat, POST /api/export-pdf)" },
-  { layer: "AI Engine", tech: "z-ai-web-dev-sdk LLM — Text-to-SQL conversion, translation, confidence scoring, follow-ups" },
+  { layer: "Frontend", tech: "Next.js 16, React 19, Tailwind CSS 4, shadcn/ui, Recharts" },
+  { layer: "API Layer", tech: "Next.js Route Handlers (GET /api/stats, GET /api/history, POST /api/chat, POST /api/export-pdf)" },
+  { layer: "AI Engine", tech: "z-ai-web-dev-sdk LLM — SQL generation, translation, confidence scoring, follow-up generation" },
   { layer: "Database", tech: "SQLite via Prisma ORM — 5 models (PoliceStation, Officer, CrimeType, Case, QueryLog)" },
-  { layer: "Data", tech: "800 seeded crime cases across 10 Bangalore police stations, 20 officers, 15 crime categories, 2 years" },
+  { layer: "Data", tech: "200 seeded crime cases across 10 Bangalore police stations, 20 officers, 15 crime types, 2 years" },
 ];
 
 export default function AboutPage() {
   return (
-    <div className="min-h-screen bg-[#080c14] text-slate-100 pb-12">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 relative z-10 space-y-8">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 text-xs font-semibold text-amber-400 hover:text-amber-300 transition-colors px-3 py-1.5 rounded-xl glass-card border border-white/10 hover:border-amber-500/30"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to Intelligence Hub
+    <div className="min-h-screen bg-background">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+        <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-8">
+          <ArrowLeft className="h-4 w-4" />Back to Chat
         </Link>
 
-        {/* Hero Banner */}
-        <div className="glass-card p-6 sm:p-8 rounded-3xl border border-white/10 relative overflow-hidden shadow-2xl">
-          <div className="flex flex-col sm:flex-row items-center gap-6">
-            <div className="relative w-20 h-20 rounded-2xl overflow-hidden shadow-xl shadow-amber-500/20 border-2 border-amber-500/40 flex-shrink-0">
-              <Image src="/ksp_logo.jpg" alt="KSP Emblem" fill className="object-cover" />
+        <div className="space-y-2 mb-10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
+              <Shield className="h-5 w-5 text-primary-foreground" />
             </div>
-            <div className="space-y-1 text-center sm:text-left">
-              <div className="flex items-center justify-center sm:justify-start gap-2">
-                <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">KSP Crime Intelligence AI</h1>
-                <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-xs">v2.5</Badge>
-              </div>
-              <p className="text-xs sm:text-sm text-slate-300">
-                Karnataka State Police Datathon 2026 • Challenge 1 Solution Architecture
-              </p>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">KSP Crime Intelligence</h1>
+              <p className="text-sm text-muted-foreground">Architecture & Features — KSP Datathon 2026</p>
             </div>
           </div>
         </div>
 
         {/* Architecture Stack */}
-        <div className="space-y-4">
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <Database className="h-5 w-5 text-amber-400" /> Technology Architecture Stack
+        <div className="mb-10">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Database className="h-5 w-5 text-primary" />Architecture Stack
           </h2>
           <div className="space-y-2">
             {architecture.map((item) => (
-              <div key={item.layer} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 p-3.5 rounded-xl glass-card border border-white/10">
-                <span className="text-xs font-bold text-amber-400 min-w-[100px]">{item.layer}</span>
-                <span className="text-xs text-slate-300 font-mono">{item.tech}</span>
+              <div key={item.layer} className="flex items-start gap-3 p-3 rounded-lg bg-card border border-border/50">
+                <span className="text-xs font-semibold text-primary min-w-[90px] pt-0.5">{item.layer}</span>
+                <span className="text-sm text-muted-foreground">{item.tech}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Competition Features Grid */}
-        <div className="space-y-4">
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <Zap className="h-5 w-5 text-amber-400" /> 11 Core Competition Features
+        {/* Features Grid */}
+        <div>
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Zap className="h-5 w-5 text-primary" />11 Competition Features
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {features.map((f) => (
-              <Card key={f.title} className="glass-card glass-card-hover border border-white/10 rounded-2xl">
+              <Card key={f.title} className="border-border/50 bg-card/50">
                 <CardContent className="p-5">
-                  <div className="flex items-center gap-3 mb-2.5">
-                    <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                      <f.icon className="h-4 w-4" />
+                  <div className="flex items-center gap-2.5 mb-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <f.icon className="h-4 w-4 text-primary" />
                     </div>
-                    <h3 className="text-sm font-bold text-white">{f.title}</h3>
+                    <h3 className="text-sm font-semibold">{f.title}</h3>
                   </div>
-                  <p className="text-xs text-slate-300 leading-relaxed mb-3">{f.description}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed mb-3">{f.description}</p>
                   <div className="flex flex-wrap gap-1.5">
                     {f.tech.map((t) => (
-                      <span key={t} className="text-[10px] font-mono px-2 py-0.5 rounded-lg bg-slate-800 text-amber-300/90 border border-white/5">
-                        {t}
-                      </span>
+                      <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{t}</span>
                     ))}
                   </div>
                 </CardContent>
@@ -156,8 +141,9 @@ export default function AboutPage() {
           </div>
         </div>
 
-        <div className="pt-6 border-t border-white/10 text-center text-xs text-slate-500">
-          KSP Crime Intelligence AI • Karnataka State Police Datathon 2026
+        {/* Footer */}
+        <div className="mt-12 pt-6 border-t text-center text-xs text-muted-foreground/50">
+          KSP Crime Intelligence — Built for KSP Datathon 2026 Challenge 1
         </div>
       </div>
     </div>

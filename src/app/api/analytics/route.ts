@@ -29,83 +29,79 @@ export async function GET() {
       topOfficers,
       genderDist,
     ] = await Promise.all([
-      // Crime by type (top 10)
+      // Crime by type (top 10 minor heads)
       db.$queryRawUnsafe(`
-        SELECT ct.name as name, COUNT(*) as count
-        FROM \`Case\` c
-        JOIN CrimeType ct ON c.crimeTypeId = ct.id
-        GROUP BY ct.name
+        SELECT csh.CrimeHeadName as name, COUNT(*) as count
+        FROM CaseMaster cm
+        JOIN CrimeSubHead csh ON cm.CrimeMinorHeadID = csh.CrimeSubHeadID
+        GROUP BY csh.CrimeHeadName
         ORDER BY count DESC
         LIMIT 10
       `),
       // Crime by status
       db.$queryRawUnsafe(`
-        SELECT c.status as name, COUNT(*) as count
-        FROM \`Case\` c
-        GROUP BY c.status
+        SELECT csm.CaseStatusName as name, COUNT(*) as count
+        FROM CaseMaster cm
+        JOIN CaseStatusMaster csm ON cm.CaseStatusID = csm.CaseStatusID
+        GROUP BY csm.CaseStatusName
         ORDER BY count DESC
       `),
-      // Crime by priority
+      // Crime by gravity/offence priority
       db.$queryRawUnsafe(`
-        SELECT c.priority as name, COUNT(*) as count
-        FROM \`Case\` c
-        GROUP BY c.priority
-        ORDER BY
-          CASE c.priority
-            WHEN 'Critical' THEN 1
-            WHEN 'High' THEN 2
-            WHEN 'Medium' THEN 3
-            WHEN 'Low' THEN 4
-          END
-      `),
-      // Crime by area (station area)
-      db.$queryRawUnsafe(`
-        SELECT ps.area as name, COUNT(*) as count
-        FROM \`Case\` c
-        JOIN PoliceStation ps ON c.stationId = ps.id
-        GROUP BY ps.area
+        SELECT go.LookupValue as name, COUNT(*) as count
+        FROM CaseMaster cm
+        JOIN GravityOffence go ON cm.GravityOffenceID = go.GravityOffenceID
+        GROUP BY go.LookupValue
         ORDER BY count DESC
       `),
-      // Monthly trend (last 12 months)
-      // NOTE: SQLite stores DateTime as INTEGER (ms timestamp), so we must
-      // compare against a numeric epoch-millisecond value, NOT a text date string.
-      // SQLite type affinity rule: INTEGER < TEXT, so string comparisons always fail.
+      // Crime by station area
+      db.$queryRawUnsafe(`
+        SELECT u.UnitName as name, COUNT(*) as count
+        FROM CaseMaster cm
+        JOIN Unit u ON cm.PoliceStationID = u.UnitID
+        GROUP BY u.UnitName
+        ORDER BY count DESC
+      `),
+      // Monthly trend
       db.$queryRawUnsafe(`
         SELECT
-          strftime('%Y-%m', c.filedDate / 1000, 'unixepoch', 'localtime') as month,
+          strftime('%Y-%m', cm.CrimeRegisteredDate / 1000, 'unixepoch', 'localtime') as month,
           COUNT(*) as count,
-          SUM(CASE WHEN c.status IN ('Closed', 'Charge Sheeted') THEN 1 ELSE 0 END) as resolved
-        FROM \`Case\` c
-        WHERE c.filedDate >= (strftime('%s', 'now', '-12 months') * 1000)
-        GROUP BY strftime('%Y-%m', c.filedDate / 1000, 'unixepoch', 'localtime')
+          SUM(CASE WHEN csm.CaseStatusName IN ('Closed', 'Charge Sheeted') THEN 1 ELSE 0 END) as resolved
+        FROM CaseMaster cm
+        JOIN CaseStatusMaster csm ON cm.CaseStatusID = csm.CaseStatusID
+        WHERE cm.CrimeRegisteredDate >= (strftime('%s', 'now', '-12 months') * 1000)
+        GROUP BY strftime('%Y-%m', cm.CrimeRegisteredDate / 1000, 'unixepoch', 'localtime')
         ORDER BY month ASC
       `),
-      // Crime by category
+      // Crime by major category (major head)
       db.$queryRawUnsafe(`
-        SELECT ct.category as name, COUNT(*) as count
-        FROM \`Case\` c
-        JOIN CrimeType ct ON c.crimeTypeId = ct.id
-        GROUP BY ct.category
+        SELECT ch.CrimeGroupName as name, COUNT(*) as count
+        FROM CaseMaster cm
+        JOIN CrimeHead ch ON cm.CrimeMajorHeadID = ch.CrimeHeadID
+        GROUP BY ch.CrimeGroupName
         ORDER BY count DESC
       `),
-      // Top officers by case count
+      // Top officers by registered case count
       db.$queryRawUnsafe(`
-        SELECT o.name, o.rank, ps.area, COUNT(*) as case_count,
-          SUM(CASE WHEN c.status IN ('Closed', 'Charge Sheeted') THEN 1 ELSE 0 END) as resolved
-        FROM \`Case\` c
-        JOIN Officer o ON c.assignedToId = o.id
-        JOIN PoliceStation ps ON o.stationId = ps.id
-        GROUP BY o.id
+        SELECT e.FirstName as name, r.RankName as rank, u.UnitName as area, COUNT(*) as case_count,
+          SUM(CASE WHEN csm.CaseStatusName IN ('Closed', 'Charge Sheeted') THEN 1 ELSE 0 END) as resolved
+        FROM CaseMaster cm
+        JOIN Employee e ON cm.PolicePersonID = e.EmployeeID
+        JOIN Rank r ON e.RankID = r.RankID
+        JOIN Unit u ON cm.PoliceStationID = u.UnitID
+        JOIN CaseStatusMaster csm ON cm.CaseStatusID = csm.CaseStatusID
+        GROUP BY e.EmployeeID
         ORDER BY case_count DESC
         LIMIT 10
       `),
       // Victim gender distribution
       db.$queryRawUnsafe(`
         SELECT
-          COALESCE(c.victimGender, 'Unknown') as name,
+          CASE v.GenderID WHEN 1 THEN 'Male' WHEN 2 THEN 'Female' ELSE 'Unknown' END as name,
           COUNT(*) as count
-        FROM \`Case\` c
-        GROUP BY c.victimGender
+        FROM Victim v
+        GROUP BY v.GenderID
         ORDER BY count DESC
       `),
     ]);

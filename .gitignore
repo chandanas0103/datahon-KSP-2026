@@ -50,7 +50,6 @@ test
 prompt
 
 server.log
+npm-cache/
 # Skills directory
 /skills/
-*.db
-*.db-journal

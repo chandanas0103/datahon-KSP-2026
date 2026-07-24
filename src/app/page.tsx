@@ -16,14 +16,16 @@ import {
   Mic, MicOff, FileText, Clock, History, ArrowRight, Languages,
   ShieldCheck, ShieldAlert, ShieldQuestion, X, Download, PanelLeftClose, PanelLeft,
   TrendingUp, FolderOpen, MapPin, Activity, RefreshCw, Wrench, Zap, Play,
-  BarChart3 as BarChartIcon, Keyboard, Timer, Lightbulb,
+  BarChart3 as BarChartIcon, Keyboard, Timer, Lightbulb, Volume2, VolumeX, FileSpreadsheet, LogIn, LogOut, UserCheck,
 } from 'lucide-react'
+import { exportToCsv } from '@/lib/csv-exporter'
+import { FirModal, FirData } from '@/components/fir-modal'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
-import ExplainabilityPanel from '@/components/ExplainabilityPanel'
+import { generateKspPdfReport } from '@/lib/pdf-generator'
 
 // ─── Types ─────────────────────────────────────────────────
 
@@ -145,7 +147,7 @@ function TranslationNotice({ original, translated }: { original: string; transla
   )
 }
 
-function ResultsTable({ results }: { results: Record<string, unknown>[] }) {
+function ResultsTable({ results, onSelectFir }: { results: Record<string, unknown>[]; onSelectFir?: (row: Record<string, unknown>) => void }) {
   if (!results || results.length === 0) return null
   const columns = Object.keys(results[0])
   return (
@@ -160,17 +162,24 @@ function ResultsTable({ results }: { results: Record<string, unknown>[] }) {
         </thead>
         <tbody>
           {results.slice(0, 10).map((row, i) => (
-            <tr key={i} className="border-b border-border/30 last:border-0 hover:bg-muted/30 transition-colors">
+            <tr key={i} onClick={() => onSelectFir && onSelectFir(row)} className="border-b border-border/30 last:border-0 hover:bg-primary/5 cursor-pointer transition-colors group">
               {columns.map((col) => (
-                <td key={col} className="px-3 py-2 whitespace-nowrap max-w-[200px] truncate text-xs">{String(row[col] ?? '—')}</td>
+                <td key={col} className="px-3 py-2 whitespace-nowrap max-w-[200px] truncate text-xs">
+                  {col.toLowerCase().includes('no') || col.toLowerCase().includes('crime') ? (
+                    <span className="font-mono font-semibold text-primary group-hover:underline">{String(row[col] ?? '—')}</span>
+                  ) : (
+                    String(row[col] ?? '—')
+                  )}
+                </td>
               ))}
             </tr>
           ))}
         </tbody>
       </table>
-      {results.length > 10 && (
-        <div className="px-3 py-2 text-xs text-muted-foreground border-t border-border/30 bg-muted/20">Showing 10 of {results.length} rows</div>
-      )}
+      <div className="px-3 py-1.5 text-[10px] text-muted-foreground border-t border-border/30 bg-muted/20 flex justify-between items-center">
+        <span>Showing {Math.min(10, results.length)} of {results.length} rows</span>
+        <span className="text-primary font-medium">Click any row to open Official FIR View (Form-1)</span>
+      </div>
     </div>
   )
 }
@@ -282,7 +291,7 @@ function SqlBlock({ sql, explanation, timing, onToggleExplanation, showExplanati
   )
 }
 
-function MessageBubble({ message, userQuestion, onFollowup, onExport, onToggleExplanation }: { message: Message; userQuestion: string; onFollowup: (q: string) => void; onExport: () => void; onToggleExplanation: (id: string) => void }) {
+function MessageBubble({ message, userQuestion, onFollowup, onExport, onToggleExplanation, isExporting, onSelectFir }: { message: Message; userQuestion: string; onFollowup: (q: string) => void; onExport: () => void; onToggleExplanation: (id: string) => void; isExporting?: boolean; onSelectFir?: (row: Record<string, unknown>) => void }) {
   const isUser = message.role === 'user'
   const displayContent = message.streamedContent ?? message.content
 
@@ -322,20 +331,39 @@ function MessageBubble({ message, userQuestion, onFollowup, onExport, onToggleEx
         {!isUser && message.translatedQuestion && (
           <TranslationNotice original={message.translatedQuestion} translated={message.content} />
         )}
-        {!isUser && !message.streamedContent && (
+        {!isUser && !message.streamedContent && !message.error && (
           <div className="flex flex-wrap items-center gap-2 mt-1">
             {message.confidence && <ConfidenceBadge level={message.confidence} />}
             {message.selfHealed && message.retryCount && <SelfHealBadge count={message.retryCount} />}
             {message.responseTime != null && message.responseTime > 0 && <ResponseTimeBadge ms={message.responseTime} />}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[11px] text-muted-foreground gap-1 hover:text-foreground hover:bg-muted/60 transition-colors"
+              onClick={() => {
+                if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+                  window.speechSynthesis.cancel()
+                  const u = new SpeechSynthesisUtterance(message.content.replace(/\*/g, ''))
+                  if (/[\u0C80-\u0CFF]/.test(message.content)) u.lang = 'kn-IN'
+                  else if (/[\u0900-\u097F]/.test(message.content)) u.lang = 'hi-IN'
+                  else u.lang = 'en-IN'
+                  window.speechSynthesis.speak(u)
+                }
+              }}
+            >
+              <Volume2 className="h-3 w-3 text-primary" />
+              <span>Listen</span>
+            </Button>
             {message.results && message.results.length > 0 && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px] text-muted-foreground gap-1 hover:text-foreground" onClick={onExport}>
-                    <Download className="h-3 w-3" />Export Report
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Download a formatted report</TooltipContent>
-              </Tooltip>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[11px] text-muted-foreground gap-1 hover:text-foreground hover:bg-muted/60 transition-colors"
+                onClick={() => exportToCsv(`ksp-query-results-${new Date().toISOString().slice(0, 10)}`, message.results!)}
+              >
+                <FileSpreadsheet className="h-3 w-3 text-emerald-500" />
+                <span>Export CSV</span>
+              </Button>
             )}
           </div>
         )}
@@ -343,7 +371,7 @@ function MessageBubble({ message, userQuestion, onFollowup, onExport, onToggleEx
         {!isUser && message.results && message.results.length > 0 && !message.streamedContent && (
           <>
             <ChartPanel results={message.results} />
-            <ResultsTable results={message.results} />
+            <ResultsTable results={message.results} onSelectFir={onSelectFir} />
           </>
         )}
         {!isUser && message.followups && message.followups.length > 0 && !message.streamedContent && (
@@ -354,19 +382,6 @@ function MessageBubble({ message, userQuestion, onFollowup, onExport, onToggleEx
               </button>
             ))}
           </div>
-        )}
-        {!isUser && !message.streamedContent && (
-          <ExplainabilityPanel
-            userQuestion={userQuestion}
-            translatedQuestion={message.translatedQuestion}
-            sql={message.sql}
-            resultsCount={message.results ? message.results.length : 0}
-            responseTime={message.responseTime}
-            confidence={message.confidence}
-            selfHealed={message.selfHealed}
-            retryCount={message.retryCount}
-            finalAnswer={message.content}
-          />
         )}
       </div>
     </div>
@@ -558,6 +573,17 @@ function DemoBanner({ onPlay, onDismiss }: { onPlay: () => void; onDismiss: () =
 // ─── Main Component ────────────────────────────────────────
 
 export default function Home() {
+  const [selectedFir, setSelectedFir] = useState<FirData | null>(null)
+  const [user, setUser] = useState<{ name: string; kgid: string; rank: string; station: string } | null>(null)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('ksp_user')
+      if (stored) {
+        try { setUser(JSON.parse(stored)) } catch {}
+      }
+    }
+  }, [])
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
@@ -687,32 +713,27 @@ export default function Home() {
     setVoiceLang(next)
   }, [voiceLang])
 
+  const [exportingId, setExportingId] = useState<string | null>(null)
+
   // PDF Export
   const handleExport = useCallback((msg: Message, question: string) => {
-    fetch('/api/export-pdf', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        question,
-        answer: msg.content,
-        sql: msg.sql,
-        results: msg.results,
-        confidence: msg.confidence,
-        responseTime: msg.responseTime,
-      }),
-    })
-    .then(res => res.blob())
-    .then(blob => {
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `ksp-crime-report-${new Date().toISOString().slice(0, 10)}.html`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    })
-    .catch(() => { window.print() })
+    setExportingId(msg.id)
+    setTimeout(() => {
+      try {
+        generateKspPdfReport({
+          question,
+          answer: msg.content,
+          sql: msg.sql,
+          results: msg.results,
+          confidence: msg.confidence,
+          responseTime: msg.responseTime,
+        })
+      } catch (err) {
+        console.error('PDF export error:', err)
+      } finally {
+        setExportingId(null)
+      }
+    }, 100)
   }, [])
 
   const clearChat = useCallback(() => { setMessages([]) }, [])
@@ -778,6 +799,32 @@ export default function Home() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {user ? (
+                  <div className="flex items-center gap-2">
+                    <div className="hidden sm:flex flex-col text-right">
+                      <span className="text-xs font-semibold text-foreground flex items-center gap-1 justify-end">
+                        <UserCheck className="h-3 w-3 text-emerald-500" /> {user.name}
+                      </span>
+                      <span className="text-[9px] text-muted-foreground font-mono">{user.kgid} • {user.station.split(' ')[0]}</span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs text-muted-foreground hover:text-foreground h-8 px-2 gap-1"
+                      onClick={() => {
+                        if (typeof window !== 'undefined') localStorage.removeItem('ksp_user')
+                        setUser(null)
+                      }}
+                    >
+                      <LogOut className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Logout</span>
+                    </Button>
+                  </div>
+                ) : (
+                  <a href="/login" className="text-xs text-primary font-medium hover:underline flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 border border-primary/20">
+                    <LogIn className="h-3.5 w-3.5" /> Officer Login
+                  </a>
+                )}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <a href="/about" className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 px-2 py-1 rounded-md hover:bg-muted/50">
@@ -852,15 +899,54 @@ export default function Home() {
                   {showDemo && (
                     <DemoBanner onPlay={handleDemo} onDismiss={() => setShowDemo(false)} />
                   )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-2xl mt-2">
-                    {SAMPLE_QUESTIONS.slice(0, 6).map((q, i) => (
-                      <button key={q} onClick={() => sendMessage(q)} className="text-left text-sm px-4 py-3 rounded-xl border border-border/50 bg-card hover:bg-muted/50 hover:border-border transition-all duration-200 group animate-in fade-in slide-in-from-bottom-2" style={{ animationDelay: `${600 + i * 50}ms`, animationFillMode: 'backwards' }}>
-                        <span className="flex items-start gap-2">
-                          <Sparkles className="h-4 w-4 text-primary/60 mt-0.5 flex-shrink-0 group-hover:text-primary transition-colors" />
-                          <span className="text-foreground/80 group-hover:text-foreground transition-colors">{q}</span>
-                        </span>
-                      </button>
-                    ))}
+                  {/* Sample Questions in Multilingual Switcher */}
+                  <div className="w-full max-w-2xl mt-2 space-y-2">
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                        <Sparkles className="h-3.5 w-3.5 text-primary" />Sample Queries
+                      </span>
+                      <div className="flex items-center gap-1 bg-muted/40 p-0.5 rounded-lg border border-border/40">
+                        {[
+                          { code: 'kn', label: 'ಕನ್ನಡ' },
+                          { code: 'hi', label: 'हिंदी' },
+                          { code: 'en', label: 'English' },
+                        ].map((l) => (
+                          <button
+                            key={l.code}
+                            onClick={() => setVoiceLang(l.code === 'kn' ? 'kn-IN' : l.code === 'hi' ? 'hi-IN' : 'en-IN')}
+                            className={`px-2 py-0.5 text-[10px] rounded-md transition-colors ${
+                              (voiceLang.startsWith(l.code)) ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            {l.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {(voiceLang === 'kn-IN' ? [
+                        'ಬೆಂಗಳೂರಿನಲ್ಲಿ ಎಷ್ಟು ಕಳ್ಳತನ ಪ್ರಕರಣಗಳಿವೆ?',
+                        'ಎಷ್ಟು ಒಟ್ಟು ಪ್ರಕರಣಗಳು ಉದ್ಭವಿಸಿವೆ?',
+                        'ಅತ್ಯಂತ ಸಾಮಾನ್ಯ ಅಪರಾಧಗಳು ಯಾವುವು?',
+                        'ವೈಟ್‌ಫೀಲ್ಡ್‌ನಲ್ಲಿ ಎಷ್ಟು ಪ್ರಕರಣಗಳು?',
+                        'ಇನ್ಸ್ಪೆಕ್ಟರ್ ರವಿ ಕುಮಾರ್ ಪ್ರಕರಣಗಳನ್ನು ತೋರಿಸಿ',
+                        'ಕೊರಮಂಗಲದಲ್ಲಿ ಎಷ್ಟು ಪ್ರಕರಣಗಳು?',
+                      ] : voiceLang === 'hi-IN' ? [
+                        'बेंगलुरु में कितने चोरी के मामले हैं?',
+                        'कुल कितने मामले दर्ज हैं?',
+                        'सबसे आम अपराध कौन से हैं?',
+                        'व्हाइटफील्ड में कितने मामले हैं?',
+                        'इंस्पेक्टर रवि कुमार के मामले दिखाएं',
+                        'कोरमंगला में कितने मामले हैं?',
+                      ] : SAMPLE_QUESTIONS.slice(0, 6)).map((q, i) => (
+                        <button key={q} onClick={() => sendMessage(q)} className="text-left text-sm px-4 py-3 rounded-xl border border-border/50 bg-card hover:bg-muted/50 hover:border-border transition-all duration-200 group animate-in fade-in slide-in-from-bottom-2" style={{ animationDelay: `${600 + i * 50}ms`, animationFillMode: 'backwards' }}>
+                          <span className="flex items-start gap-2">
+                            <Sparkles className="h-4 w-4 text-primary/60 mt-0.5 flex-shrink-0 group-hover:text-primary transition-colors" />
+                            <span className="text-foreground/80 group-hover:text-foreground transition-colors">{q}</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -876,6 +962,14 @@ export default function Home() {
                       onFollowup={sendMessage}
                       onExport={() => handleExport(msg, userQ)}
                       onToggleExplanation={toggleExplanation}
+                      isExporting={exportingId === msg.id}
+                      onSelectFir={(row) => setSelectedFir({
+                        crimeNo: String(row.CrimeNo || row.crimeNo || '104430006201202600001'),
+                        caseNo: String(row.CaseNo || row.caseNo || '202600001'),
+                        stationName: String(row.station || row.police_station || row.stationName || 'Whitefield Police Station'),
+                        statusName: String(row.status || 'Under Investigation'),
+                        briefFacts: String(row.BriefFacts || row.description || row.crime || 'FIR registered and investigation in progress under Section 154 Cr.P.C.'),
+                      })}
                     />
                     )
                   })}
@@ -918,7 +1012,25 @@ export default function Home() {
 
           {/* Input Area */}
           <div className="no-print flex-shrink-0 px-4 sm:px-6 pb-4 pt-2 bg-gradient-to-t from-background via-background to-transparent">
-            <div className="max-w-3xl mx-auto">
+            <div className="max-w-3xl mx-auto space-y-2">
+              {/* Command Quick Badges */}
+              <div className="flex flex-wrap gap-1.5 px-1">
+                {[
+                  { label: '🔴 Critical Cases', query: 'Show all open critical cases under investigation' },
+                  { label: '⚡ Cyber Fraud', query: 'Show cyber fraud cases filed in Bengaluru' },
+                  { label: '👮 Inspector Ravi Kumar', query: 'Show cases assigned to Inspector Ravi Kumar' },
+                  { label: '📍 Whitefield Summary', query: 'How many theft cases were filed in Whitefield?' },
+                ].map((b) => (
+                  <button
+                    key={b.label}
+                    onClick={() => sendMessage(b.query)}
+                    className="text-[10px] px-2.5 py-1 rounded-full border border-primary/20 bg-primary/5 text-primary hover:bg-primary/15 transition-all font-medium flex items-center gap-1"
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+
               <Card className="shadow-lg shadow-primary/5 border-border/50">
                 <CardContent className="p-3">
                   <div className="flex gap-2 items-end">
@@ -1010,7 +1122,7 @@ export default function Home() {
                 { keys: ['Escape'], desc: 'Close overlay / unfocus' },
                 { keys: ['?'], desc: 'Show this shortcuts panel' },
               ].map(s => (
-                <div key={s.desc} className="flex items-center justify-between">
+                <div key={`${s.desc}-${s.keys.join('-')}`} className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">{s.desc}</span>
                   <div className="flex items-center gap-1">
                     {s.keys.map(k => (
@@ -1023,6 +1135,12 @@ export default function Home() {
           </div>
         </div>
       )}
+      {/* FIR Form-1 Official View Modal */}
+      <FirModal
+        isOpen={!!selectedFir}
+        onClose={() => setSelectedFir(null)}
+        data={selectedFir}
+      />
     </TooltipProvider>
   )
 }

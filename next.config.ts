@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  devIndicators: false,
   reactStrictMode: false,
   // Prevent redirect loops behind reverse proxies (space-z.ai / Cloudflare, etc.)
   skipTrailingSlashRedirect: true,

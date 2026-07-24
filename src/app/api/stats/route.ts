@@ -3,11 +3,15 @@ import { db } from "@/lib/db";
 
 export async function GET() {
   try {
-    const [totalCases, openCasesRaw, stations, topCrimeRaw] = await Promise.all([
+    const [totalCases, openCases, stations, topCrimeRaw, resolvedCases] = await Promise.all([
       db.caseMaster.count(),
-      db.$queryRawUnsafe<Array<{ count: bigint }>>(`
-        SELECT COUNT(*) as count FROM CaseMaster cm JOIN CaseStatusMaster csm ON cm.CaseStatusID = csm.CaseStatusID WHERE csm.CaseStatusName IN ('Open', 'Under Investigation')
-      `),
+      db.caseMaster.count({
+        where: {
+          status: {
+            CaseStatusName: { in: ["Open", "Under Investigation"] },
+          },
+        },
+      }),
       db.unit.count(),
       db.$queryRawUnsafe<Array<{ name: string; count: bigint }>>(`
         SELECT csh.CrimeHeadName as name, COUNT(*) as count
@@ -17,14 +21,15 @@ export async function GET() {
         ORDER BY count DESC
         LIMIT 1
       `),
+      db.caseMaster.count({
+        where: {
+          status: {
+            CaseStatusName: { in: ["Closed", "Charge Sheeted"] },
+          },
+        },
+      }),
     ]);
 
-    const resolvedRaw = await db.$queryRawUnsafe<Array<{ count: bigint }>>(`
-      SELECT COUNT(*) as count FROM CaseMaster cm JOIN CaseStatusMaster csm ON cm.CaseStatusID = csm.CaseStatusID WHERE csm.CaseStatusName IN ('Closed', 'Charge Sheeted')
-    `);
-
-    const openCases = Array.isArray(openCasesRaw) && openCasesRaw.length > 0 ? Number(openCasesRaw[0].count) : 0;
-    const resolvedCases = Array.isArray(resolvedRaw) && resolvedRaw.length > 0 ? Number(resolvedRaw[0].count) : 0;
     const resolutionRate = totalCases > 0 ? Math.round((resolvedCases / totalCases) * 100) : 0;
 
     const topCrime = Array.isArray(topCrimeRaw) && topCrimeRaw.length > 0
