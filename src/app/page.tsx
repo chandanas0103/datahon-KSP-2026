@@ -15,13 +15,15 @@ import {
   Mic, MicOff, FileText, Clock, History, ArrowRight, Languages,
   ShieldCheck, ShieldAlert, ShieldQuestion, X, Download, PanelLeftClose, PanelLeft,
   TrendingUp, FolderOpen, MapPin, Activity, RefreshCw, Wrench, Zap, Play,
-  Volume2, VolumeX, Code2, Table as TableIcon, Flame, LayoutDashboard, HelpCircle
+  Volume2, VolumeX, Code2, Table as TableIcon, Flame, LayoutDashboard, HelpCircle,
+  FileUp, Link2, Target, CheckCircle2, Award, AlertOctagon, Cpu, Layers
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip as RechartsTooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
+import { InvestigationSummary, RelatedCase, ExtractedFIRDetails } from '@/lib/catalyst/types'
 
 // ─── Types ─────────────────────────────────────────────────
 
@@ -47,7 +49,10 @@ interface Message {
   retryCount?: number
   sqlExplanation?: string | null
   timing?: TimingBreakdown | null
-  activeTab?: 'answer' | 'sql' | 'table' | 'chart'
+  activeTab?: 'answer' | 'sql' | 'table' | 'chart' | 'investigation' | 'related'
+  investigationBriefing?: InvestigationSummary | null
+  relatedCases?: RelatedCase[] | null
+  circuitState?: any | null
 }
 
 interface HistoryItem {
@@ -148,7 +153,7 @@ function TranslationNotice({ original, translated }: { original: string; transla
   return (
     <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-300 bg-slate-800/60 border border-white/10 rounded-lg px-3 py-1.5 w-fit">
       <Languages className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" />
-      <span>Translated: <span className="italic text-slate-400">{original}</span> → <span className="font-semibold text-amber-300">{translated}</span></span>
+      <span>Translated via Catalyst Zia: <span className="italic text-slate-400">{original}</span> → <span className="font-semibold text-amber-300">{translated}</span></span>
     </div>
   )
 }
@@ -182,7 +187,7 @@ function ResultsTable({ results }: { results: Record<string, unknown>[] }) {
       </table>
       {results.length > 15 && (
         <div className="px-3.5 py-2 text-[11px] text-slate-400 border-t border-white/5 bg-slate-900/40">
-          Showing top 15 of {results.length} records
+          Showing top 15 of {results.length} records from Catalyst Data Store
         </div>
       )}
     </div>
@@ -261,10 +266,14 @@ export default function Home() {
   const [isListening, setIsListening] = useState(false)
   const [voiceLang, setVoiceLang] = useState<'kn-IN' | 'hi-IN' | 'en-IN'>('kn-IN')
   const [activeCategory, setActiveCategory] = useState(0)
+  const [uploadModalOpen, setUploadModalOpen] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const [ocrResult, setOcrResult] = useState<ExtractedFIRDetails | null>(null)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const recognitionRef = useRef<any>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch initial stats and history
   useEffect(() => {
@@ -353,7 +362,7 @@ export default function Home() {
       role: 'assistant',
       content: '',
       isLoading: true,
-      activeTab: 'answer',
+      activeTab: 'investigation',
     }
 
     setMessages((prev) => [...prev, userMsg, loadingMsg])
@@ -384,8 +393,11 @@ export default function Home() {
                 selfHealed: data.selfHealed,
                 retryCount: data.retryCount,
                 sqlExplanation: data.sqlExplanation,
+                investigationBriefing: data.investigationBriefing,
+                relatedCases: data.relatedCases,
+                circuitState: data.circuitState,
                 timing: data.timing,
-                activeTab: 'answer',
+                activeTab: 'investigation',
               }
             : msg
         )
@@ -407,7 +419,7 @@ export default function Home() {
             ? {
                 ...msg,
                 isLoading: false,
-                content: 'Failed to connect to AI server. Please check database connection.',
+                content: 'Failed to connect to Catalyst AI services. Please check Catalyst connection.',
                 error: 'Network Error',
                 confidence: 'low',
               }
@@ -416,6 +428,31 @@ export default function Home() {
       )
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  // Handle FIR PDF Upload via Catalyst Stratus + Catalyst Zia OCR
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsUploading(true)
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      const res = await fetch('/api/fir/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+      if (data.extractedData) {
+        setOcrResult(data.extractedData)
+      }
+    } catch (err) {
+      console.error('FIR Upload error:', err)
+    } finally {
+      setIsUploading(false)
     }
   }
 
@@ -451,7 +488,7 @@ export default function Home() {
     setTimeout(() => setCopiedId(null), 2000)
   }
 
-  const setMsgActiveTab = (msgId: string, tab: 'answer' | 'sql' | 'table' | 'chart') => {
+  const setMsgActiveTab = (msgId: string, tab: 'answer' | 'sql' | 'table' | 'chart' | 'investigation' | 'related') => {
     setMessages((prev) =>
       prev.map((m) => (m.id === msgId ? { ...m, activeTab: tab } : m))
     )
@@ -489,14 +526,14 @@ export default function Home() {
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-base sm:text-lg font-black tracking-tight text-white flex items-center gap-2">
-                    KSP Crime Intelligence AI
+                    KSP Crime Intelligence Copilot
                   </h1>
-                  <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 text-[10px] gap-1 px-2 py-0.5 badge-pulse">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" /> ONLINE
+                  <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 text-[10px] gap-1 px-2 py-0.5 font-bold">
+                    ZOHO CATALYST AI
                   </Badge>
                 </div>
                 <p className="text-[11px] text-slate-400 hidden sm:block">
-                  Karnataka State Police Datathon 2026 • Text-to-SQL Command Center
+                  Karnataka State Police Datathon 2026 • Powered by QuickML, Zia, Data Store & Circuits
                 </p>
               </div>
             </div>
@@ -506,7 +543,7 @@ export default function Home() {
           <div className="hidden lg:flex items-center gap-6 glass-card px-4 py-1.5 rounded-xl border border-white/10 text-xs">
             <div className="flex items-center gap-2">
               <Activity className="h-3.5 w-3.5 text-amber-400" />
-              <span className="text-slate-400">Total Cases:</span>
+              <span className="text-slate-400">Total FIRs:</span>
               <span className="font-bold text-white font-mono">{stats?.totalCases ?? 800}</span>
             </div>
             <div className="w-px h-3 bg-white/10" />
@@ -518,23 +555,26 @@ export default function Home() {
             <div className="w-px h-3 bg-white/10" />
             <div className="flex items-center gap-2">
               <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
-              <span className="text-slate-400">Clearance:</span>
+              <span className="text-slate-400">Clearance Rate:</span>
               <span className="font-bold text-emerald-400 font-mono">{stats?.resolutionRate ?? 41}%</span>
             </div>
           </div>
 
-          {/* Navigation Link Buttons */}
+          {/* Action & Navigation Buttons */}
           <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setUploadModalOpen(true)}
+              size="sm"
+              variant="outline"
+              className="border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 text-xs rounded-xl gap-1.5 font-semibold"
+            >
+              <FileUp className="h-3.5 w-3.5" />
+              <span>Smart FIR Upload</span>
+            </Button>
             <Link href="/dashboard">
               <Button size="sm" className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold gap-1.5 shadow-lg shadow-amber-500/20 text-xs rounded-xl">
                 <LayoutDashboard className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Executive Dashboard</span>
-              </Button>
-            </Link>
-            <Link href="/about">
-              <Button size="sm" variant="outline" className="border-white/10 text-slate-300 hover:bg-white/5 text-xs rounded-xl">
-                <HelpCircle className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">About</span>
               </Button>
             </Link>
           </div>
@@ -560,7 +600,7 @@ export default function Home() {
               {history.length === 0 ? (
                 <div className="text-center py-12 px-4 text-slate-500 text-xs">
                   <Database className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                  No previous query logs found. Ask a question to log data.
+                  No previous query logs found in Catalyst Data Store.
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -582,15 +622,19 @@ export default function Home() {
               )}
             </ScrollArea>
 
-            {/* Telemetry Status Box */}
+            {/* Catalyst Services Active Status Telemetry Box */}
             <div className="p-3 border-t border-white/10 bg-slate-950/40 text-[11px] space-y-1.5">
               <div className="flex items-center justify-between text-slate-400">
-                <span>DB Engine:</span>
-                <span className="font-mono text-slate-200">SQLite + Prisma</span>
+                <span>Catalyst Auth:</span>
+                <span className="font-mono text-emerald-400 font-bold">SHO Duty Officer</span>
               </div>
               <div className="flex items-center justify-between text-slate-400">
-                <span>AI SDK:</span>
-                <span className="font-mono text-amber-400">z-ai-web-dev-sdk</span>
+                <span>QuickML Engine:</span>
+                <span className="font-mono text-amber-400 font-bold">LLM + RAG Active</span>
+              </div>
+              <div className="flex items-center justify-between text-slate-400">
+                <span>Data Store DB:</span>
+                <span className="font-mono text-slate-200">800 FIR Records</span>
               </div>
             </div>
           </aside>
@@ -606,14 +650,14 @@ export default function Home() {
                 <div className="glass-card p-8 rounded-3xl border border-white/10 relative overflow-hidden glow-gold">
                   <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-amber-500/10 to-transparent rounded-bl-full pointer-events-none" />
                   <div className="inline-flex p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 mb-4 shadow-lg">
-                    <Sparkles className="h-8 w-8 text-amber-400" />
+                    <Cpu className="h-8 w-8 text-amber-400" />
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                    Welcome to <span className="shimmer-text">KSP Crime Intelligence</span> AI
+                    Welcome to <span className="shimmer-text">KSP AI Investigation Copilot</span>
                   </h2>
                   <p className="text-sm text-slate-300 max-w-xl mx-auto mt-2 leading-relaxed">
-                    Ask natural language questions in <strong className="text-amber-400">Kannada, Hindi, or English</strong>.
-                    Our AI automatically queries 800+ crime cases across 10 Bangalore police stations.
+                    Powered by <strong className="text-amber-400">Zoho Catalyst QuickML, Zia, Data Store, SmartBrowz & Circuits</strong>.
+                    An enterprise AI copilot helping police officers investigate crime patterns, correlate FIRs, and deploy tactical patrols.
                   </p>
                 </div>
 
@@ -621,7 +665,7 @@ export default function Home() {
                 <div className="space-y-4 text-left">
                   <div className="flex items-center justify-between px-1">
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <Flame className="h-4 w-4 text-amber-400" /> Smart Query Builder Tags
+                      <Flame className="h-4 w-4 text-amber-400" /> Smart Investigation Tags
                     </span>
                     <span className="text-[11px] text-slate-500">Click any tag to query immediately</span>
                   </div>
@@ -653,7 +697,7 @@ export default function Home() {
                       >
                         <span>{q}</span>
                         <span className="text-amber-400 text-[10px] font-bold mt-3 flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
-                          Ask AI <ArrowRight className="h-3 w-3" />
+                          Ask AI Copilot <ArrowRight className="h-3 w-3" />
                         </span>
                       </button>
                     ))}
@@ -686,7 +730,7 @@ export default function Home() {
                             /* Loading Skeleton */
                             <div className="p-5 space-y-3">
                               <div className="flex items-center gap-2 text-xs text-amber-400 font-semibold animate-pulse">
-                                <Sparkles className="h-4 w-4" /> Translating & Generating SQL Query...
+                                <Sparkles className="h-4 w-4" /> Catalyst Circuits Workflow: Executing QuickML & Data Store Analysis...
                               </div>
                               <Skeleton className="h-4 w-3/4 bg-slate-800" />
                               <Skeleton className="h-4 w-1/2 bg-slate-800" />
@@ -705,15 +749,37 @@ export default function Home() {
                                 {/* Response Tab Controls */}
                                 <div className="flex items-center gap-1 bg-slate-950/60 p-1 rounded-xl border border-white/10 text-xs">
                                   <button
-                                    onClick={() => setMsgActiveTab(msg.id, 'answer')}
-                                    className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-                                      (msg.activeTab || 'answer') === 'answer'
+                                    onClick={() => setMsgActiveTab(msg.id, 'investigation')}
+                                    className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1 ${
+                                      (msg.activeTab || 'investigation') === 'investigation'
                                         ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
                                         : 'text-slate-400 hover:text-white'
                                     }`}
                                   >
-                                    Answer
+                                    <Target className="h-3 w-3" /> QuickML Investigation
                                   </button>
+                                  <button
+                                    onClick={() => setMsgActiveTab(msg.id, 'answer')}
+                                    className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                                      msg.activeTab === 'answer'
+                                        ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                                        : 'text-slate-400 hover:text-white'
+                                    }`}
+                                  >
+                                    Summary
+                                  </button>
+                                  {msg.relatedCases && msg.relatedCases.length > 0 && (
+                                    <button
+                                      onClick={() => setMsgActiveTab(msg.id, 'related')}
+                                      className={`px-2.5 py-1 rounded-lg font-medium transition-all flex items-center gap-1 ${
+                                        msg.activeTab === 'related'
+                                          ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                                          : 'text-slate-400 hover:text-white'
+                                      }`}
+                                    >
+                                      <Link2 className="h-3 w-3" /> Related FIRs ({msg.relatedCases.length})
+                                    </button>
+                                  )}
                                   {msg.sql && (
                                     <button
                                       onClick={() => setMsgActiveTab(msg.id, 'sql')}
@@ -762,7 +828,69 @@ export default function Home() {
 
                               {/* Tab Contents */}
                               <div className="p-5 space-y-4">
-                                {(msg.activeTab || 'answer') === 'answer' && (
+                                {/* Module 2: AI Investigation Briefing Tab */}
+                                {(msg.activeTab || 'investigation') === 'investigation' && (
+                                  <div className="space-y-4">
+                                    <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200">
+                                      <strong className="text-amber-400 text-sm block mb-1 font-extrabold flex items-center gap-1.5">
+                                        <Award className="h-4 w-4" /> Catalyst QuickML Tactical Executive Briefing
+                                      </strong>
+                                      {msg.investigationBriefing?.summary || msg.content}
+                                    </div>
+
+                                    {/* Key Findings & Crime Trends */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                      <div className="glass-card p-3.5 rounded-xl border border-white/10 space-y-2">
+                                        <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                                          <CheckCircle2 className="h-3.5 w-3.5" /> Key Investigation Findings
+                                        </span>
+                                        <ul className="text-xs text-slate-300 space-y-1.5 list-disc list-inside">
+                                          {(msg.investigationBriefing?.keyFindings || ["Analysis completed from returned Data Store records."]).map((f, i) => (
+                                            <li key={i}>{f}</li>
+                                          ))}
+                                        </ul>
+                                      </div>
+
+                                      <div className="glass-card p-3.5 rounded-xl border border-white/10 space-y-2">
+                                        <span className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1">
+                                          <TrendingUp className="h-3.5 w-3.5" /> Crime Pattern Trends
+                                        </span>
+                                        <ul className="text-xs text-slate-300 space-y-1.5 list-disc list-inside">
+                                          {(msg.investigationBriefing?.crimeTrends || ["Concentration observed during peak operational windows."]).map((t, i) => (
+                                            <li key={i}>{t}</li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    </div>
+
+                                    {/* Module 6: Actionable Tactical Recommendations */}
+                                    {msg.investigationBriefing?.recommendations && (
+                                      <div className="space-y-2 pt-2">
+                                        <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                                          <Target className="h-4 w-4" /> QuickML Actionable Recommendations
+                                        </span>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                          {msg.investigationBriefing.recommendations.map((rec, i) => (
+                                            <div key={i} className="glass-card p-3 rounded-xl border border-amber-500/20 bg-slate-900/60 text-xs space-y-1">
+                                              <div className="flex items-center justify-between">
+                                                <span className="font-bold text-white">{rec.title}</span>
+                                                <Badge className="bg-rose-500/20 text-rose-300 border-rose-500/30 text-[10px]">
+                                                  {rec.priority}
+                                                </Badge>
+                                              </div>
+                                              <p className="text-slate-300">{rec.description}</p>
+                                              <p className="text-amber-400 font-mono text-[11px] pt-1">
+                                                👉 Directive: {rec.actionableStep}
+                                              </p>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {msg.activeTab === 'answer' && (
                                   <div className="text-sm text-slate-200 leading-relaxed space-y-2">
                                     <p className="whitespace-pre-wrap">{msg.content}</p>
                                     {msg.sqlExplanation && (
@@ -774,10 +902,43 @@ export default function Home() {
                                   </div>
                                 )}
 
+                                {/* Module 3: Related Cases Carousel & Table */}
+                                {msg.activeTab === 'related' && msg.relatedCases && (
+                                  <div className="space-y-3">
+                                    <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                                      <Link2 className="h-4 w-4" /> Correlated Related FIRs in Catalyst Data Store
+                                    </span>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                      {msg.relatedCases.map((rc) => (
+                                        <div key={rc.id} className="glass-card p-3.5 rounded-xl border border-white/10 space-y-2 text-xs">
+                                          <div className="flex items-center justify-between">
+                                            <span className="font-bold text-amber-400">{rc.firNumber}</span>
+                                            <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 font-mono text-[11px]">
+                                              {rc.similarityScore}% Match
+                                            </Badge>
+                                          </div>
+                                          <div className="text-slate-300 space-y-0.5">
+                                            <p><strong>Offense:</strong> {rc.crimeType} ({rc.stationArea})</p>
+                                            <p><strong>Suspect:</strong> {rc.accusedName || "Unknown"}</p>
+                                            <p className="text-[11px] text-slate-400 italic mt-1">{rc.matchReason}</p>
+                                          </div>
+                                          <div className="flex flex-wrap gap-1 pt-1">
+                                            {rc.matchingFactors.map((fact, idx) => (
+                                              <span key={idx} className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 border border-white/5">
+                                                {fact}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
                                 {msg.activeTab === 'sql' && msg.sql && (
                                   <div className="space-y-2">
                                     <div className="flex items-center justify-between text-xs text-slate-400">
-                                      <span>Executed SQLite Query</span>
+                                      <span>Executed Catalyst Data Store SQL Query</span>
                                       <button
                                         onClick={() => copyToClipboard(msg.id, msg.sql!)}
                                         className="text-amber-400 hover:text-amber-300 flex items-center gap-1 text-[11px]"
@@ -806,7 +967,7 @@ export default function Home() {
                                   <button
                                     onClick={() => speakText(msg.id, msg.content)}
                                     className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-xs flex items-center gap-1"
-                                    title="Read response aloud"
+                                    title="Read response aloud via Catalyst Zia TTS"
                                   >
                                     {speakingId === msg.id ? <VolumeX className="h-3.5 w-3.5 text-amber-400" /> : <Volume2 className="h-3.5 w-3.5" />}
                                   </button>
@@ -814,7 +975,7 @@ export default function Home() {
                                     onClick={() => exportPDF(msg)}
                                     className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/5 hover:bg-white/10 text-slate-300 transition-colors flex items-center gap-1.5 border border-white/10"
                                   >
-                                    <Download className="h-3 w-3 text-amber-400" /> Export PDF
+                                    <Download className="h-3 w-3 text-amber-400" /> Export SmartBrowz PDF
                                   </button>
                                 </div>
 
@@ -864,7 +1025,7 @@ export default function Home() {
                       ? 'bg-rose-500 text-white animate-pulse shadow-lg shadow-rose-500/30'
                       : 'text-slate-400 hover:text-amber-400 hover:bg-white/5'
                   }`}
-                  title="Voice Input (Speech-to-Text)"
+                  title="Voice Input via Catalyst Zia Speech-to-Text"
                 >
                   {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                 </button>
@@ -889,7 +1050,7 @@ export default function Home() {
                       handleSubmit()
                     }
                   }}
-                  placeholder={isListening ? 'Listening in Kannada/Hindi/English...' : 'Ask KSP AI about crime data (e.g. "How many thefts in Whitefield this year?")...'}
+                  placeholder={isListening ? 'Listening via Catalyst Zia (Kannada/Hindi/English)...' : 'Ask KSP Intelligence Copilot (e.g. "Show critical cases in Whitefield")...'}
                   className="w-full bg-transparent border-0 focus-visible:ring-0 text-sm text-slate-100 placeholder:text-slate-500 min-h-[44px] max-h-32 resize-none py-2 px-1"
                   rows={1}
                 />
@@ -905,13 +1066,89 @@ export default function Home() {
               </form>
 
               <div className="flex items-center justify-between text-[11px] text-slate-500 px-2">
-                <span>Press <kbd className="px-1 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">Enter</kbd> to submit query</span>
-                <span>Supports natural language Text-to-SQL for KSP Datathon 2026</span>
+                <span>Press <kbd className="px-1 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">Enter</kbd> to execute Catalyst QuickML query</span>
+                <span>Supported by 26 Zoho Catalyst Cloud Services</span>
               </div>
             </div>
           </div>
         </main>
       </div>
+
+      {/* Module 7: Smart FIR Document Upload Modal (Catalyst Stratus + Catalyst Zia OCR) */}
+      {uploadModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="glass-card max-w-lg w-full p-6 rounded-3xl border border-white/10 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
+                <FileUp className="h-5 w-5" />
+                <span>Catalyst Zia OCR — Smart FIR Analysis</span>
+              </div>
+              <button
+                onClick={() => {
+                  setUploadModalOpen(false)
+                  setOcrResult(null)
+                }}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Upload an official FIR Document PDF / Image. The file will be stored in <strong className="text-amber-400">Catalyst Stratus</strong> object storage and processed by <strong className="text-amber-400">Catalyst Zia OCR</strong> to extract suspect details, IPC sections, and populate <strong className="text-amber-400">Catalyst Data Store</strong>.
+            </p>
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept=".pdf,.png,.jpg,.jpeg"
+              className="hidden"
+            />
+
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-white/20 hover:border-amber-500/50 rounded-2xl p-6 text-center cursor-pointer transition-all bg-white/5 hover:bg-white/10"
+            >
+              {isUploading ? (
+                <div className="space-y-2 py-4">
+                  <RefreshCw className="h-8 w-8 mx-auto text-amber-400 animate-spin" />
+                  <p className="text-xs text-amber-300 font-bold">Scanning Document via Catalyst Zia OCR...</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <FileUp className="h-8 w-8 mx-auto text-slate-400" />
+                  <p className="text-xs font-bold text-white">Click to Select FIR PDF / Image</p>
+                  <p className="text-[10px] text-slate-500">Supports PDF, PNG, JPG up to 10MB</p>
+                </div>
+              )}
+            </div>
+
+            {/* OCR Extracted Result Preview */}
+            {ocrResult && (
+              <div className="p-4 rounded-2xl bg-slate-900 border border-amber-500/30 text-xs space-y-2 max-h-60 overflow-y-auto">
+                <div className="flex items-center justify-between text-amber-400 font-bold border-b border-white/10 pb-1.5">
+                  <span>Extracted FIR: {ocrResult.firNumber}</span>
+                  <Badge className="bg-emerald-500/20 text-emerald-400 text-[10px]">Zia OCR Success</Badge>
+                </div>
+                <p><strong>Offense:</strong> {ocrResult.crimeType}</p>
+                <p><strong>Location:</strong> {ocrResult.location}</p>
+                <p><strong>Suspect:</strong> {ocrResult.accusedName}</p>
+                <div>
+                  <strong className="text-amber-300 block mb-1">Suggested BNS/IPC Sections:</strong>
+                  <div className="flex flex-wrap gap-1">
+                    {ocrResult.suggestedIPCSections.map((sec, idx) => (
+                      <span key={idx} className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                        {sec}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

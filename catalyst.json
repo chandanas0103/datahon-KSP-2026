@@ -1,0 +1,37 @@
+{
+  "project_name": "ksp-crime-intelligence-copilot",
+  "project_id": "ksp-datathon-2026",
+  "client": {
+    "source": "out",
+    "type": "web"
+  },
+  "appsail": [
+    {
+      "name": "ksp-nextjs-app",
+      "source": "./",
+      "build": "npm run build",
+      "stack": "node20"
+    }
+  ],
+  "functions": [
+    {
+      "name": "ksp-signal-processor",
+      "type": "event",
+      "source": "functions/signal-processor",
+      "handler": "index.handler"
+    }
+  ],
+  "crons": [
+    {
+      "name": "ksp-daily-briefing-cron",
+      "cron_expression": "0 8 * * *",
+      "target_url": "/api/cron/daily-report"
+    }
+  ],
+  "circuits": [
+    {
+      "name": "ksp-investigation-circuit",
+      "definition": "circuits/investigation-workflow.json"
+    }
+  ]
+}

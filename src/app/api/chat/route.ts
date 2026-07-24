@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import ZAI from "z-ai-web-dev-sdk";
+import { CatalystQuickMLService, CatalystDataStoreService, CatalystCircuitsService } from "@/lib/catalyst";
 
 const SCHEMA_CONTEXT = `
 You are a Text-to-SQL assistant for the Karnataka State Police (KSP) Crime Database.
@@ -345,11 +346,14 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Step 3: Generate natural answer + SQL explanation (parallel)
+    // Step 3: Generate natural answer, SQL explanation, QuickML Investigation Briefing, & Related Cases (parallel)
     const t3 = Date.now();
-    const [answer, sqlExplanation] = await Promise.all([
+    const [answer, sqlExplanation, investigationBriefing, relatedCases, circuitState] = await Promise.all([
       Promise.resolve(generateNaturalAnswer(translatedQuestion, sql, results)),
       explainSQL(sql),
+      CatalystQuickMLService.generateInvestigationSummary(translatedQuestion, sql, results),
+      CatalystDataStoreService.findRelatedCases(translatedQuestion, results),
+      CatalystCircuitsService.executeQueryWorkflow(question),
     ]);
 
     // Step 4: Confidence scoring + followups (parallel)
@@ -373,6 +377,9 @@ export async function POST(request: NextRequest) {
       translatedQuestion: translatedQuestion !== question ? translatedQuestion : null,
       responseTime, followups,
       sqlExplanation: sqlExplanation || null,
+      investigationBriefing,
+      relatedCases,
+      circuitState,
       timing: { translation: translationTime, sqlGeneration: sqlGenTimeFinal, confidence: confidenceTime },
       ...(retryCount > 0 ? { selfHealed: true, retryCount } : {}),
     });
