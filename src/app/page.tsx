@@ -24,6 +24,7 @@ import {
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
 import { InvestigationSummary, RelatedCase, ExtractedFIRDetails } from '@/lib/catalyst/types'
+import ExplainabilityPanel from '@/components/ExplainabilityPanel'
 
 // ─── Types ─────────────────────────────────────────────────
 
@@ -994,6 +995,25 @@ export default function Home() {
                                     ))}
                                   </div>
                                 )}
+                              </div>
+
+                              {/* How AI Processed Your Query - Explainability Telemetry Panel */}
+                              <div className="px-4 pb-3">
+                                <ExplainabilityPanel
+                                  userQuestion={
+                                    messages[messages.findIndex((m) => m.id === msg.id) - 1]?.content ||
+                                    msg.translatedQuestion ||
+                                    msg.content
+                                  }
+                                  translatedQuestion={msg.translatedQuestion}
+                                  sql={msg.sql}
+                                  resultsCount={msg.results ? msg.results.length : 0}
+                                  responseTime={msg.responseTime}
+                                  confidence={msg.confidence}
+                                  selfHealed={msg.selfHealed}
+                                  retryCount={msg.retryCount}
+                                  finalAnswer={msg.content}
+                                />
                               </div>
                             </div>
                           )}
